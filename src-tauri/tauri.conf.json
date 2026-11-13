@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "纸间笔记",
+  "version": "2.5.10",
+  "identifier": "com.zhijian.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "纸间笔记 · 个人笔记",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1000,
+        "minHeight": 640,
+        "decorations": false,
+        "resizable": true,
+        "center": true,
+        "backgroundColor": "#F7F8F6"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost blob: data:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "publisher": "The ZhiJian Authors",
+    "category": "Productivity",
+    "shortDescription": "纸间笔记 · 本地优先的个人笔记",
+    "longDescription": "纸间笔记是一款本地优先的个人笔记桌面应用。笔记本与笔记本组、多标签、全文搜索、富文本/Markdown 双模式编辑器、图片附件、提醒、模板、笔记内链、网页剪藏、回收站与多格式导入导出，全部在本机完成；笔记以纯文本 Markdown/HTML 镜像落盘，不需要账号、不上传数据。",
+    "copyright": "Copyright © 2026 The ZhiJian Authors",
+    "windows": {
+      "nsis": {
+        "displayLanguageSelector": false,
+        "languages": ["SimpChinese"],
+        "installMode": "currentUser"
+      }
+    }
+  }
+}

@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  frontend:
+    name: 前端构建与存档迁移测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: node tools/verify_migrate.mjs
+      - run: python tools/make_singlefile.py "${{ runner.temp }}/offline.html"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: offline-single-file
+          path: ${{ runner.temp }}/offline.html
+
+  desktop:
+    name: Windows 桌面版
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: node tools/verify_migrate.mjs
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
+      - run: cargo build --release --manifest-path src-tauri/Cargo.toml
+      - run: python tools/package.py "${{ runner.temp }}/release"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-portable
+          path: ${{ runner.temp }}/release/

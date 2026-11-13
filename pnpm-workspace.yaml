@@ -1,0 +1,5 @@
+# pnpm 12 起构建脚本白名单从 package.json 的 pnpm 字段迁移到本文件，
+# 且设置名由 onlyBuiltDependencies 改为 allowBuilds。
+# esbuild 必须执行安装脚本才能链接平台二进制（Vite 依赖它）。
+allowBuilds:
+  esbuild: true

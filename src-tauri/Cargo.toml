@@ -1,0 +1,27 @@
+[package]
+name = "zhijian-desktop"
+version = "2.5.10"
+edition = "2021"
+description = "纸间 · 本地优先的个人笔记桌面客户端"
+authors = ["The ZhiJian Authors"]
+license = "Apache-2.0"
+
+# 把自己隔离成独立 workspace root，避免被上层目录的 Cargo.toml 误认为子包。
+[workspace]
+
+[features]
+# Tauri 用 custom-protocol 区分开发/生产。不开这个特性时裸 cargo build 出来
+# 的 exe 会去连 devUrl 而显示白页，所以设为默认开启。
+custom-protocol = ["tauri/custom-protocol"]
+default = ["custom-protocol"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["image-png"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+rfd = "0.17.2"
+ureq = { version = "2", features = ["json"] }
