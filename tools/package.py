@@ -14,7 +14,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE = ROOT.parent
 OUT = Path(sys.argv[1] if len(sys.argv) > 1 else os.environ.get('ZHIJIAN_OUT', str(WORKSPACE / 'output' / 'zhijian')))
-EXE = ROOT / 'src-tauri' / 'target' / 'release' / 'zhijian-desktop.exe'
+# v2.5.11 起 mainBinaryName=「纸间笔记」，tauri 产物直接叫这个名字；旧名兜底
+EXE_CANDIDATES = [
+    ROOT / 'src-tauri' / 'target' / 'release' / '纸间笔记.exe',
+    ROOT / 'src-tauri' / 'target' / 'release' / 'zhijian-desktop.exe',
+]
+EXE = next((p for p in EXE_CANDIDATES if p.exists()), EXE_CANDIDATES[0])
 
 README = """纸间笔记 Paperquill · 个人版笔记（便携版）
 ================================

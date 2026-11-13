@@ -1,7 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "纸间笔记",
-  "version": "2.5.10",
+  "productName": "Paperquill",
+  "mainBinaryName": "纸间笔记",
+  "version": "2.5.11",
   "identifier": "com.zhijian.desktop",
   "build": {
     "beforeDevCommand": "pnpm dev",

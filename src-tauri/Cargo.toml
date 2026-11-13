@@ -1,6 +1,6 @@
 [package]
 name = "zhijian-desktop"
-version = "2.5.10"
+version = "2.5.11"
 edition = "2021"
 description = "纸间 · 本地优先的个人笔记桌面客户端"
 authors = ["The ZhiJian Authors"]

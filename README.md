@@ -17,7 +17,7 @@
 
 | 形态 | 交付物 | 数据存哪 | 适用 |
 | --- | --- | --- | --- |
-| **桌面安装版** | `Paperquill-2.5.10-setup-win64.exe`（NSIS 向导） | `%APPDATA%\com.zhijian.desktop\` | 向导式安装到当前用户，可从「应用与功能」卸载，数据目录与便携版相同 |
+| **桌面安装版** | `Paperquill-2.5.11-setup-win64.exe`（NSIS 向导） | `%APPDATA%\com.zhijian.desktop\`（安装目录 `%LOCALAPPDATA%\Paperquill`） | 向导式安装到当前用户，可从「应用与功能」卸载，数据目录与便携版相同 |
 | **桌面便携版（推荐）** | `纸间笔记.exe` / `纸间笔记-桌面版.zip` | `%APPDATA%\com.zhijian.desktop\` | 日常使用，真实文件落盘、公开 URL 剪藏、原生保存对话框 |
 | **离线单文件版** | `纸间笔记-离线版.html` | 浏览器 localStorage | 双击即用，零安装；换机器时用备份 JSON 搬家 |
 | **源码开发** | 本项目 | 同上（按运行环境） | 改功能、二次开发 |

@@ -2,6 +2,18 @@
 
 本项目采用语义化版本。存档格式变更单独记录，详见 `docs/data-format.md`。
 
+## [2.5.11] - 2026-11-13
+
+安装目录与安装包命名改用英文名 Paperquill。
+
+- **`productName` 改为 `Paperquill`**：NSIS 安装目录变为 `%LOCALAPPDATA%\Paperquill`，
+  安装包文件名变为 `Paperquill_2.5.11_x64-setup.exe`（不再依赖重命名就能上传 GitHub）；
+  「应用与功能」里的卸载条目名同步为 Paperquill。
+- **新增顶层 `mainBinaryName` 配置为「纸间笔记」**：主程序与开始菜单 / 桌面快捷方式
+  仍显示中文名「纸间笔记」，窗口标题不变。
+- 标识符 `com.zhijian.desktop` 与数据目录不变，安装版与便携版数据互通，老数据不受影响。
+- 便携版交付流程不变（Release exe → `纸间笔记.exe`），换用 v2.5.11 构建。
+
 ## [2.5.10] - 2026-11-13
 
 全局通知统一到窗口上部中间 + 修复到期提醒列表被裁切。
