@@ -640,7 +640,7 @@ function AboutDialog() {
   const { closeDialog, ws } = useApp();
   const live = ws.notes.filter((n) => !n.trashed);
   return (
-    <Modal title="关于纸间笔记" subtitle="本地优先的个人笔记 · v2.5.10" width={620}
+    <Modal title="关于纸间笔记" subtitle="Paperquill · 本地优先的个人笔记 · v2.5.10" width={620}
       onClose={closeDialog} icon={<Info size={19} />}
       footer={<Btn variant="primary" onClick={closeDialog}>知道了</Btn>}>
       <div className="about-stat">

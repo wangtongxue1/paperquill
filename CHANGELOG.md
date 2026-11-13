@@ -16,6 +16,9 @@
   `.reminder-pop`，用户只能看到一条边。改成 `createPortal` 挂到 `document.body` +
   `fixed` 锚定铃铛按钮下方（`z-index: 1400`），整张列表完整可见、可点；
   标题栏原有布局不动，点遮罩空白 / Esc / 再点铃铛仍可关闭。
+- 确定英文名 **Paperquill**（纸间之笔，quill = 羽毛笔），与纸间阅读 Paperlight 成系列；
+  GitHub 仓库同步更名为 `wangtongxue1/paperquill`。中文显示名「纸间笔记」与数据目录
+  `com.zhijian.desktop` 保持不变，老数据不受影响。
 - 回归：新增 `tools/v2510-verify.py`（33 项断言），覆盖顶部居中、层级最高、
   多条竖向堆叠不重叠、单条关闭、自动消失、提醒弹窗完整可见，以及开着提醒列表 /
   模态框时通知仍在最上层。

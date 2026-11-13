@@ -16,7 +16,7 @@ WORKSPACE = ROOT.parent
 OUT = Path(sys.argv[1] if len(sys.argv) > 1 else os.environ.get('ZHIJIAN_OUT', str(WORKSPACE / 'output' / 'zhijian')))
 EXE = ROOT / 'src-tauri' / 'target' / 'release' / 'zhijian-desktop.exe'
 
-README = """纸间笔记 · 个人版笔记（便携版）
+README = """纸间笔记 Paperquill · 个人版笔记（便携版）
 ================================
 
 【怎么运行】
