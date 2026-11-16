@@ -188,6 +188,8 @@ VIAddVersionKey "ProductVersion" "${VERSION}"
 ; 4. Custom page to ask user if he wants to reinstall/uninstall
 ;    only if a previous installation was detected
 Var ReinstallPageCheck
+; 已检测到本产品已安装（同版本或升级）时置 1：跳过重装选择页，自动先卸旧程序再安装。
+Var AutoReinstall
 Page custom PageReinstall PageLeaveReinstall
 
 ; Find a previous WiX installation and set $R6 to its uninstall registry key, or to "" if none.
@@ -286,6 +288,18 @@ Function PageReinstall
   ; we are downgrading or not.
   ${If} $PassiveMode = 1
     Call PageLeaveReinstall
+  ${ElseIf} $R0 = -1
+    ; 降级仍走选择页（降级默认被禁用时只有卸载可选）
+    nsDialogs::Create 1018
+  ${ElseIf} $WixMode = 0
+  ${AndIf} $UpdateMode = 0
+  ${AndUnless} ${Silent}
+    ; 已安装同版本或更高版本：不再问「添加/重新安装还是卸载」，
+    ; 默认先卸载旧程序文件再安装（笔记数据在数据目录，不在安装目录，不受影响；
+    ; 卸载以静默方式执行且带 /UPDATE，即使勾选了「删除应用数据」也会跳过）。
+    StrCpy $AutoReinstall 1
+    Call PageLeaveReinstall
+    Return
   ${Else}
     nsDialogs::Create 1018
     Pop $R4
@@ -376,6 +390,7 @@ Function PageLeaveReinstall
       ReadRegStr $R1 SHCTX "${UNINSTKEY}" "UninstallString"
       ${IfThen} $UpdateMode = 1 ${|} StrCpy $R1 "$R1 /UPDATE" ${|} ; append /UPDATE
       ${IfThen} $PassiveMode = 1 ${|} StrCpy $R1 "$R1 /P" ${|} ; append /P
+      ${IfThen} $AutoReinstall = 1 ${|} StrCpy $R1 "$R1 /UPDATE /P" ${|} ; 自动重装：静默卸载且绝不删数据
       StrCpy $R1 "$R1 _?=$4" ; append uninstall directory
       ExecWait '$R1' $0
     ${EndIf}
