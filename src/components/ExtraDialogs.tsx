@@ -23,7 +23,8 @@ export function SearchDialog() {
 
   const results = useMemo(() => {
     const parsed = parseQuery(q);
-    const base = ws.notes.filter((n) => !n.trashed && matchFilters(n, parsed, nbName));
+    // 全局搜索不搜隐藏笔记：隐藏的意义就是「翻不到」。
+    const base = ws.notes.filter((n) => !n.trashed && !n.hidden && matchFilters(n, parsed, nbName));
     return searchNotes(base, parsed.text).slice(0, 40);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, ws.notes, ws.notebooks]);

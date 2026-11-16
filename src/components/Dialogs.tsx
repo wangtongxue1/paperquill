@@ -95,7 +95,7 @@ function TagDialog() {
   const { dialog, closeDialog, ws, actions } = useApp();
   const ids: string[] = dialog.payload?.ids || [];
   const [value, setValue] = useState('');
-  const existing = Array.from(new Set(ws.notes.filter((n) => !n.trashed).flatMap((n) => n.tags))).sort((a, b) => a.localeCompare(b, 'zh'));
+  const existing = Array.from(new Set(ws.notes.filter((n) => !n.trashed && !n.hidden).flatMap((n) => n.tags))).sort((a, b) => a.localeCompare(b, 'zh'));
   const submit = (tag: string) => { if (!tag.trim()) return; actions.addTagTo(ids, tag); closeDialog(); };
   return (
     <Modal title={`给 ${ids.length} 篇笔记加标签`} width={430} onClose={closeDialog} icon={<Tag size={19} />}
@@ -113,7 +113,7 @@ function TagDialog() {
 
 function TagManagerDialog() {
   const { closeDialog, ws, actions, openDialog } = useApp();
-  const live = ws.notes.filter((n) => !n.trashed);
+  const live = ws.notes.filter((n) => !n.trashed && !n.hidden);
   const tags = useMemo(
     () => Array.from(new Set(live.flatMap((n) => n.tags))).sort((a, b) => a.localeCompare(b, 'zh')),
     [ws.notes] // eslint-disable-line react-hooks/exhaustive-deps
@@ -479,8 +479,8 @@ function IoDialog() {
         <button onClick={() => void exportZip()}>
           <Archive size={17} /><strong>全库 Markdown ZIP</strong><span>按笔记本分目录，一篇一个 .md</span>
         </button>
-        <button onClick={() => void saveText(`纸间笔记-${formatDateTime(Date.now()).slice(0, 10)}.enex`, exportEnex(ws.notes.filter((n) => !n.trashed)), 'application/xml')}>
-          <FileText size={17} /><strong>全库 ENEX</strong><span>可导入印象笔记等支持 ENEX 的软件</span>
+        <button onClick={() => void saveText(`纸间笔记-${formatDateTime(Date.now()).slice(0, 10)}.enex`, exportEnex(ws.notes.filter((n) => !n.trashed && !n.hidden)), 'application/xml')}>
+          <FileText size={17} /><strong>全库 ENEX</strong><span>可导入印象笔记等；不含隐藏笔记</span>
         </button>
       </div>
 
@@ -645,9 +645,9 @@ const SHORTCUTS: [string, string][] = [
 
 function AboutDialog() {
   const { closeDialog, ws } = useApp();
-  const live = ws.notes.filter((n) => !n.trashed);
+  const live = ws.notes.filter((n) => !n.trashed && !n.hidden);
   return (
-    <Modal title="关于纸间笔记" subtitle="Paperquill · 本地优先的个人笔记 · v2.5.11" width={620}
+    <Modal title="关于纸间笔记" subtitle="Paperquill · 本地优先的个人笔记 · v2.5.14" width={620}
       onClose={closeDialog} icon={<Info size={19} />}
       footer={<Btn variant="primary" onClick={closeDialog}>知道了</Btn>}>
       <div className="about-stat">

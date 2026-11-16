@@ -6,6 +6,7 @@ import { buildExtensions } from '../src/editor-schema';
 import { fromEditorHtml, toEditorHtml } from '../src/tiptap-html';
 import { htmlToMd, mdToHtml } from '../src/convert';
 import { noteToDocxBlob } from '../src/docx-export';
+import { cellFullyMarked, cellSelInfo, selectTableLadder } from '../src/table-select';
 import JSZip from 'jszip';
 
 let ok = 0;
@@ -147,6 +148,77 @@ try {
   let bin = '';
   for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
   out.push('DOCX_B64=' + btoa(bin));
+  /* ---------- G. 表内框选 + 统一格式（2.5.14：选择动作从「表格菜单」搬进表里） ---------- */
+  mark('G1');
+  const edG = mount(`<table><thead><tr><th>名</th><th>值</th><th>备注</th></tr></thead>`
+    + `<tbody><tr><td>甲</td><td>1</td><td>x</td></tr><tr><td>乙</td><td>2</td><td>y</td></tr></tbody></table>`);
+  const applyCells = (ed: Editor, fn: (c: ReturnType<Editor['chain']>) => ReturnType<Editor['chain']>) => {
+    const info = cellSelInfo(ed.state);
+    if (!info) { fn(ed.chain().focus()).run(); return; }
+    let c = ed.chain().focus();
+    for (const r of info.ranges) c = fn(c.setTextSelection({ from: r.from, to: r.to }));
+    c.setCellSelection({ anchorCell: info.anchor, headCell: info.head }).run();
+  };
+  const tdG = edG.view.dom.querySelectorAll('tbody tr')[0].querySelectorAll('td')[1] as HTMLElement;
+  edG.commands.focus();
+  edG.commands.setTextSelection(edG.view.posAtDOM(tdG, 0) + 1);
+  const step1 = selectTableLadder(edG.state, (tr) => edG.view.dispatch(tr));
+  check('G1 一次 Ctrl+A 选中当前单元格', step1 && (cellSelInfo(edG.state)?.ranges.length ?? 0) === 1,
+    `handled=${step1} cells=${cellSelInfo(edG.state)?.ranges.length}`);
+  mark('G2');
+  const step2 = selectTableLadder(edG.state, (tr) => edG.view.dispatch(tr));
+  check('G2 二次 Ctrl+A 选中整张表（9 格）', step2 && (cellSelInfo(edG.state)?.ranges.length ?? 0) === 9,
+    `cells=${cellSelInfo(edG.state)?.ranges.length}`);
+  mark('G3');
+  check('G3 三次 Ctrl+A 让回默认（整篇）', selectTableLadder(edG.state, (tr) => edG.view.dispatch(tr)) === false, '');
+  // 回到整表框选，统一加粗
+  selectTableLadder(edG.state, (tr) => edG.view.dispatch(tr));
+  applyCells(edG, (c) => c.setMark('bold'));
+  const htmlG = edG.getHTML();
+  check('G4 统一加粗覆盖每一格', (htmlG.match(/<strong>/g) || []).length === 9, (htmlG.match(/<strong>/g) || []).length + ' | ' + htmlG.slice(0, 300));
+  check('G5 改完格式后框选还在', (cellSelInfo(edG.state)?.ranges.length ?? 0) === 9, `cells=${cellSelInfo(edG.state)?.ranges.length}`);
+  const allBold = (cellSelInfo(edG.state)?.ranges ?? []).every((r) => cellFullyMarked(r.node, 'bold'));
+  check('G6 全部已加粗时判定为「该取消」', allBold, '');
+  edG.commands.undo();
+  check('G7 一次撤销就能整体回退（一条事务）', (edG.getHTML().match(/<strong>/g) || []).length === 0,
+    (edG.getHTML().match(/<strong>/g) || []).length + '');
+  // 统一字号：textStyle 落到每一格
+  if (!cellSelInfo(edG.state)) selectTableLadder(edG.state, (tr) => edG.view.dispatch(tr));
+  applyCells(edG, (c) => c.setFontSize('20px'));
+  const htmlG2 = edG.getHTML();
+  check('G8 统一字号落到每格', (htmlG2.split('20px').length - 1) >= 9,
+    (htmlG2.split('20px').length - 1) + ' | ' + htmlG2.slice(0, 300));
+  check('G9 改字号后表格结构没变形', (htmlG2.match(/<tr/g) || []).length === 3 && (htmlG2.match(/<td/g) || []).length === 6,
+    htmlG2.slice(0, 200));
+
+  /* ---------- H. 真·鼠标拖动框选（prosemirror-tables 的 mousedown+mousemove） ---------- */
+  mark('H1');
+  const edH = mount(`<table><tbody><tr><td>a1</td><td>b1</td><td>c1</td></tr>`
+    + `<tr><td>a2</td><td>b2</td><td>c2</td></tr></tbody></table>`);
+  edH.commands.focus();
+  // 探针页里前面已经挂了七八个编辑器，这张表可能落在视口外——先滚进视野，
+  // 否则 posAtCoords 取不到坐标，拖动事件会被当成「点空白」直接忽略。
+  edH.view.dom.scrollIntoView({ block: 'center' });
+  await new Promise((r) => requestAnimationFrame(() => r(null)));
+  const tdH = Array.from(edH.view.dom.querySelectorAll('td')) as HTMLElement[];
+  out.push('H rects = ' + tdH.slice(0, 2).map((el) => JSON.stringify(el.getBoundingClientRect())).join(' '));
+  const mid = (el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    return { clientX: Math.round(r.left + r.width / 2), clientY: Math.round(r.top + r.height / 2) };
+  };
+  const fire = (target: EventTarget, type: string, at: { clientX: number; clientY: number }) =>
+    target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, ...at }));
+  const a1 = mid(tdH[0]);
+  const b2 = mid(tdH[4]);
+  fire(tdH[0], 'mousedown', a1);
+  fire(document, 'mousemove', b2);
+  fire(tdH[4], 'mousemove', b2);
+  fire(document, 'mouseup', b2);
+  const selectedCells = edH.view.dom.querySelectorAll('.selectedCell').length;
+  const info = cellSelInfo(edH.state);
+  check('H1 鼠标从 a1 拖到 b2 选中 4 格', selectedCells === 4 && (info?.ranges.length ?? 0) === 4,
+    `dots=${selectedCells} ranges=${info?.ranges.length ?? 0}`);
+
 } catch (err) {
   out.push(`CRASH: ${err}`);
 }

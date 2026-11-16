@@ -533,6 +533,41 @@ PROBE = r"""
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     await wait(200);
 
+    // ---------- 2.5.14 隐藏笔记：右键隐藏 → 全部笔记里消失 → 隐藏视图可见 → 全部显示回来 ----------
+    const noteRows = () => Array.from(document.querySelectorAll('.note-row, .note-card'));
+    byText('.nav-row', '全部笔记')?.click();
+    await until(() => document.querySelector('.note-row'));
+    // 先普通点一下：清掉上一步多选留下的 selection，否则右键菜单会变成「隐藏这 N 篇」
+    document.querySelector('.note-row')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await wait(360);
+    const hideTitle = (document.querySelector('.note-row h3')?.textContent || '').trim();
+    const rowsBefore = noteRows().length;
+    document.querySelector('.note-row')?.dispatchEvent(
+      new MouseEvent('contextmenu', { bubbles: true, clientX: 420, clientY: 320 }));
+    await wait(220);
+    const hideItem = byText('.menu .menu__item', '隐藏这篇笔记');
+    push('hideMenuItem', !!hideItem);
+    hideItem?.click();
+    await wait(520);
+    const stillThere = noteRows().some((r) => (r.textContent || '').includes(hideTitle));
+    push('hiddenGoneFromAll', !stillThere && noteRows().length === rowsBefore - 1);
+    const hiddenNav = byText('.nav-row', '隐藏笔记');
+    push('hiddenNav', !!hiddenNav);
+    push('hiddenNavCount', hiddenNav ? (hiddenNav.querySelector('.nav-row__count')?.textContent || '') : '');
+    hiddenNav?.click();
+    await wait(400);
+    push('hiddenRowVisible', noteRows().some((r) => (r.textContent || '').includes(hideTitle)));
+    // 隐藏视图里的落款提示 + 全部显示按钮
+    push('hiddenNotice', !!document.querySelector('.list__notice--hidden'));
+    byText('.list__notice--hidden button', '全部显示')?.click();
+    await wait(260);
+    byText('.btn', '全部取消隐藏')?.click();
+    await wait(520);
+    push('hiddenNavGone', !byText('.nav-row', '隐藏笔记'));
+    byText('.nav-row', '全部笔记')?.click();
+    await wait(320);
+    push('unhiddenBackToAll', noteRows().some((r) => (r.textContent || '').includes(hideTitle)));
+
     push('done', 1);
   } catch (e) {
     push('error', String((e && e.message) || e));
@@ -588,7 +623,15 @@ def main() -> int:
     fails: list[str] = []
     EXPECT = {
         'taskCount': '3',
-        'tableMenuItems': '10',
+        'tableMenuItems': '11',
+        'hideMenuItem': 'true',
+        'hiddenGoneFromAll': 'true',
+        'hiddenNav': 'true',
+        'hiddenNavCount': '1',
+        'hiddenRowVisible': 'true',
+        'hiddenNotice': 'true',
+        'hiddenNavGone': 'true',
+        'unhiddenBackToAll': 'true',
         'importModes': '3',
         'boardShapes': '2',
         'boardArrow': '1',
@@ -604,7 +647,7 @@ def main() -> int:
         'h4Applied': 'true',
         # 统一导出面板：5 种格式，单篇时 PDF 可选
         'exportDialog': 'true',
-        'exportFormats': '5',
+        'exportFormats': '6',
         'exportPdfUsable': 'true',
         'exportPick': 'true',
         'exportClosed': 'true',

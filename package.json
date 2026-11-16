@@ -1,7 +1,7 @@
 {
   "name": "zhijian-desktop",
   "private": true,
-  "version": "2.5.13",
+  "version": "2.5.14",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,7 +11,9 @@
     "verify:editor": "node tools/run-editor-probe.mjs",
     "verify:ui": "python tools/ui-probe.py",
     "verify:pdf": "node tools/pdf-writer-probe.mjs",
-    "verify:pdf-ui": "python tools/pdf-ui-probe.py"
+    "verify:pdf-ui": "python tools/pdf-ui-probe.py",
+    "verify:table": "node tools/run-table-probe.mjs",
+    "verify:hidden": "node tools/verify_hidden.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",

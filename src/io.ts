@@ -112,7 +112,8 @@ export async function exportMarkdownZip(ws: Workspace): Promise<string> {
   const root = zip.folder('纸间笔记导出')!;
   const seen = new Map<string, number>();
 
-  for (const note of ws.notes.filter((n) => !n.trashed)) {
+  // 隐藏笔记不散落到导出的 .md 里（完整备份 JSON 仍然带着它们，恢复时不丢）。
+  for (const note of ws.notes.filter((n) => !n.trashed && !n.hidden)) {
     const folder = note.notebookId ? byId.get(note.notebookId) || '未分类' : '未分类';
     const base = slugify(note.title || '未命名笔记');
     const count = (seen.get(`${folder}/${base}`) ?? 0) + 1;
@@ -124,7 +125,7 @@ export async function exportMarkdownZip(ws: Workspace): Promise<string> {
   root.file(
     'README.txt',
     `纸间笔记导出 · ${formatDateTime(Date.now())}\n\n` +
-    `每篇笔记是一个独立的 Markdown 文件，按笔记本分目录。\n` +
+    `每篇笔记是一个独立的 Markdown 文件，按笔记本分目录（隐藏笔记不在其中）。\n` +
     `workspace-backup.json 是完整备份，可以在纸间笔记里「导入 → 恢复备份」原样还原（含标签、提醒、回收站）。\n`
   );
   return await zip.generateAsync({ type: 'base64' });

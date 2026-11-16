@@ -24,6 +24,7 @@ import CodeBlock from '@tiptap/extension-code-block';
 import { Node, Extension, InputRule, Mark, mergeAttributes, type Extensions } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
+import { selectTableLadder } from './table-select';
 import { normalizeMediaUrl, fileKindOf, fileBadgeLabel, FILE_KIND_COLORS } from './media';
 import { formatSize } from './utils';
 import type { FindRange } from './find';
@@ -433,6 +434,24 @@ const FindHighlight = Extension.create({
   },
 });
 
+/** 表格里的 Ctrl/⌘+A 三级全选：当前单元格 → 整张表格 → 整篇文档。
+ *
+ *  prosemirror-tables 只补了方向键、Tab 和退格，没管 Mod-a；默认行为是一按就
+ *  「选中整篇」，在一张表里想全选只能靠鼠标拖。补这一层之后，表格的选取全在表里完成：
+ *  拖动框选多格、Shift + 点击扩选、Ctrl+A 逐级放大，选完直接用工具栏改格式。
+ *  priority 调高，保证先于 tiptap 内置的 baseKeymap 拿到这个按键。
+ *  具体逻辑在 table-select.ts，工具栏和探针脚本用的是同一份。
+ */
+const TableSelectAll = Extension.create({
+  name: 'tableSelectAll',
+  priority: 1000,
+  addKeyboardShortcuts() {
+    return {
+      'Mod-a': () => selectTableLadder(this.editor.state, (tr) => this.editor.view.dispatch(tr)),
+    };
+  },
+});
+
 export function buildExtensions(placeholder = ''): Extensions {
   return [
     StarterKit.configure({
@@ -476,6 +495,7 @@ export function buildExtensions(placeholder = ''): Extensions {
     Subscript,
     Superscript,
     TaskShortcut,
+    TableSelectAll,
     Placeholder.configure({ placeholder }),
     FindHighlight,
   ];

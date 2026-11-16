@@ -27,6 +27,8 @@ function normalizeNote(raw: Record<string, any>): Note {
     reminderDone: Boolean(raw.reminderDone),
     sourceUrl: String(raw.sourceUrl ?? ''),
     attachments: Array.isArray(raw.attachments) ? raw.attachments : [],
+    // v4 新增：隐藏。老档没有这个字段，按「未隐藏」补齐。
+    hidden: Boolean(raw.hidden),
   };
 }
 
@@ -93,6 +95,7 @@ export function migrate(raw: unknown): Workspace {
 
   // v1 -> v2 只增加顶层可选字段，笔记结构不变，所以不需要改写 notes。
   // v2 -> v3 只把内置模板换成新的文案/图标（见 migrateTemplates），笔记同样不动。
+  // v3 -> v4 只在笔记上补 hidden=false（见 normalizeNote），正文与其它字段一律不动。
   // 以后若有破坏性变更，在这里按 version 逐级升级。
   void version;
   return ws;

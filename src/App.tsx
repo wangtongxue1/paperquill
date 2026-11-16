@@ -9,6 +9,7 @@ import type { DialogKind, DialogState } from './context';
 import { createActions } from './actions';
 import { seedWorkspace } from './data';
 import { matchFilters, parseQuery, searchNotes } from './search';
+import { isLive, noteInNav } from './notes-filter';
 import { isDesktop, storage, wasLastLoadUpgraded, windowAction } from './storage';
 import { FULL_VIEW_KINDS } from './types';
 import type { NavSelection, Note, Workspace } from './types';
@@ -263,22 +264,8 @@ export default function App() {
     const rawQuery = saved ?? query;
     const parsed = parseQuery(rawQuery);
     const q = parsed.text;
-    const fullView = (FULL_VIEW_KINDS as readonly string[]).includes(nav.kind);
-    const base = ws.notes.filter((n) => {
-      if (fullView || nav.kind === 'savedSearch') return !n.trashed;
-      if (nav.kind === 'trash') return n.trashed;
-      if (n.trashed) return false;
-      switch (nav.kind) {
-        case 'all': return true;
-        case 'favorites': return n.favorite;
-        case 'pinned': return n.pinned;
-        case 'reminders': return !!n.reminderAt && !n.reminderDone;
-        case 'untagged': return n.tags.length === 0;
-        case 'notebook': return n.notebookId === nav.id;
-        case 'tag': return n.tags.includes(nav.name);
-        default: return true;
-      }
-    }).filter((n) => matchFilters(n, parsed, nbName));
+    // 隐藏笔记只在「隐藏笔记」视图里出现，其它视图（含搜索）一律过滤掉。
+    const base = ws.notes.filter((n) => noteInNav(n, nav)).filter((n) => matchFilters(n, parsed, nbName));
     const hits = searchNotes(base, q);
     const arr = hits.map((h) => h.note);
     if (!q && !parsed.filters.length) {
@@ -297,16 +284,16 @@ export default function App() {
   }, [ws, nav, query]);
 
   const fullView = (FULL_VIEW_KINDS as readonly string[]).includes(nav.kind);
-  const taskCount = ws ? ws.notes.filter((n) => !n.trashed).reduce((s, n) =>
+  const taskCount = ws ? ws.notes.filter(isLive).reduce((s, n) =>
     s + (n.content.match(n.mode === 'rich'
       ? /<input\b[^>]*type=["']?checkbox/gi : /^\s*[-*+]\s+\[[ xX]\]/gm) || []).length, 0) : 0;
-  const fileCount = ws ? ws.notes.filter((n) => !n.trashed).reduce((s, n) => s + (n.attachments?.length || 0), 0) : 0;
+  const fileCount = ws ? ws.notes.filter(isLive).reduce((s, n) => s + (n.attachments?.length || 0), 0) : 0;
 
   /* ---------- 提醒轮询（每 30 秒） ---------- */
   const dueReminders = useMemo(() => {
     if (!ws) return [];
     return ws.notes
-      .filter((n) => !n.trashed && n.reminderAt && !n.reminderDone && n.reminderAt <= Date.now())
+      .filter((n) => isLive(n) && n.reminderAt && !n.reminderDone && n.reminderAt <= Date.now())
       .sort((a, b) => (a.reminderAt || 0) - (b.reminderAt || 0));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ws, tick]);
@@ -372,7 +359,7 @@ export default function App() {
   };
 
   const totalWords = useMemo(
-    () => (ws ? ws.notes.filter((n) => !n.trashed).reduce((s, n) => s + wordCount(plainOf(n)), 0) : 0),
+    () => (ws ? ws.notes.filter(isLive).reduce((s, n) => s + wordCount(plainOf(n)), 0) : 0),
     [ws]
   );
   const dark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -497,7 +484,7 @@ export default function App() {
         </div>
 
         <footer className="statusbar">
-          <span><strong>{ws.notes.filter((n) => !n.trashed).length}</strong> 篇笔记</span>
+          <span><strong>{ws.notes.filter(isLive).length}</strong> 篇笔记</span>
           <span><strong>{totalWords.toLocaleString('zh-CN')}</strong> 字</span>
           <span>{ws.notebooks.length} 个笔记本</span>
           <span><strong>{taskCount}</strong> 项待办</span>

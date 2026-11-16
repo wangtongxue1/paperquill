@@ -17,7 +17,7 @@
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `version` | number | 存档格式版本，当前 **`3`**（`WORKSPACE_VERSION`） |
+| `version` | number | 存档格式版本，当前 **`4`**（`WORKSPACE_VERSION`） |
 | `notes` | Note[] | 全部笔记，**含回收站里的** |
 | `notebooks` | Notebook[] | `id / name / groupId / color / createdAt` |
 | `groups` | NotebookGroup[] | `id / name / collapsed / createdAt` |
@@ -32,6 +32,10 @@
 | `updatedAt` | number | 毫秒时间戳 |
 
 **未知字段必须原样保留。** `migrate()` 用对象展开把顶层所有字段带过去，只补缺失值、不删属性。
+
+### v3 → v4 迁移规则
+
+v4 只在每篇笔记上补 `hidden: false`（`migrate()` 里的 `normalizeNote`），已有 `hidden: true` 的笔记原样保留，正文、编辑器模式、标签、附件统统不动。隐藏是**产品层的可见性规则**，不是加密：`workspace.json` 与 `notes/*.md` 镜像里仍是明文，导出的完整备份 JSON 也照样带着隐藏笔记。
 
 ### v1 → v2 迁移规则
 
@@ -66,6 +70,7 @@ v3 **只动内置模板**，笔记结构与 `Settings` 都不变：
 | `tags` | string[] | `[]` |
 | `createdAt` / `updatedAt` | number | 当前时间 |
 | `pinned` / `favorite` / `trashed` / `reminderDone` | boolean | `false` |
+| `hidden` | boolean | v4 新增，`false`。界面级隐藏：不进全部笔记 / 搜索 / 任务 / 文件 / 提醒汇总，只在「隐藏笔记」视图可见；**不做加密**，正文仍是明文 |
 | `trashedAt` / `reminderAt` | number \| null | `null` |
 | `sourceUrl` | string | `''` |
 | `attachments` | Attachment[] | `[]`，见下 |

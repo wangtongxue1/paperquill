@@ -30,7 +30,7 @@ assert.equal(typeof migrate, 'function', 'migrate 应被导出');
 
 // 1. 空档补齐默认值
 const a = migrate({ notes: [] });
-assert.equal(a.version, 3, 'version 应升级到当前版本');
+assert.equal(a.version, 4, 'version 应升级到当前版本');
 assert.ok(Array.isArray(a.templates) && a.templates.length > 0, 'templates 应补内置模板');
 assert.equal(a.templates.length, 6, '内置模板应补齐 6 套');
 assert.ok(a.templates.every((t) => t.desc && t.desc.length > 4), '内置模板都应有一句说明');
@@ -120,4 +120,18 @@ assert.equal(f.notes.length, 0);
 assert.equal(f.templates.filter((t) => t.id.startsWith('tpl_') && !['tpl_meeting', 'tpl_gone', 'tpl_mine'].includes(t.id)).length, 5,
   '缺的内置模板要补齐（6 套里已有 1 套，再补 5 套）');
 
-console.log('migrate: 8 组断言全部通过（含 v1→v2 字段补齐、v2→v3 内置模板刷新）');
+// 7. v3 -> v4：笔记补 hidden=false，已有内容（含真的被隐藏的笔记）一个都不动
+const g = migrate({
+  version: 3,
+  notes: [
+    { id: 'n1', title: '日记', content: '正文', mode: 'markdown' },
+    { id: 'n2', title: '已经隐藏的', content: 'x', mode: 'rich', hidden: true },
+  ],
+});
+assert.equal(g.version, 4, 'v3 档要升到 v4');
+assert.equal(g.notes[0].hidden, false, '老笔记补 hidden=false');
+assert.equal(g.notes[1].hidden, true, '已经隐藏的笔记不能被迁移改回显示');
+assert.equal(g.notes[0].content, '正文', '迁移不能动正文');
+assert.equal(g.notes[1].mode, 'rich', '迁移不能动编辑器模式');
+
+console.log('migrate: 9 组断言全部通过（含 v1→v2 字段补齐、v2→v3 内置模板刷新、v3→v4 隐藏字段）');

@@ -4,6 +4,7 @@
   board  —— 画板里画一个矩形（工具保持矩形），再切选择工具选中它，
            状态栏提示「从空白拖出下一个（同形状+连线）」（2.5.1 起由点击生成改为拖出生成）。
   about  —— 关于页，标题已是「纸间笔记」。
+  cellsel—— 表格里拖选多个单元格（2.5.14：选取动作搬进表里），看选中底色和工具栏提示。
 
 用法：python tools/feature-shot.py <board|about> <输出png> [light|dark]
 前置：python tools/make_singlefile.py .temp/zhijian-probe.html
@@ -83,7 +84,44 @@ ABOUT = r"""
 </script>
 """
 
-SCRIPT = BOARD if SCENARIO == 'board' else ABOUT
+CELLSEL = r"""
+<script>
+(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const byText = (sel, t) => Array.from(document.querySelectorAll(sel)).find((e) => (e.textContent || '').includes(t));
+  await wait(250);
+  byText('.nav-row', '全部笔记')?.click();
+  await wait(350);
+  const rows = Array.from(document.querySelectorAll('.note-row, .note-card'));
+  (rows.find((r) => (r.textContent || '').includes('双模式')) || rows[0])?.click();
+  await wait(500);
+  const pill = document.querySelector('.mode-pill');
+  if (pill && pill.textContent.includes('源码')) { pill.click(); await wait(600); }
+  // 插一张 3 × 3 表
+  document.querySelector('.toolbar__caret')?.click();
+  await wait(250);
+  byText('.menu__item', '插入 3 × 3 表格')?.click();
+  await wait(600);
+  const tds = Array.from(document.querySelectorAll('.ProseMirror table td, .ProseMirror table th'));
+  if (tds.length >= 9) {
+    const at = (el) => { const r = el.getBoundingClientRect();
+      return { clientX: Math.round(r.left + r.width / 2), clientY: Math.round(r.top + r.height / 2) }; };
+    const a = at(tds[0]);
+    const z = at(tds[tds.length - 1]);
+    const fire = (t, type, p) => t.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, ...p }));
+    fire(tds[0], 'mousedown', a);
+    fire(document, 'mousemove', z);
+    fire(tds[tds.length - 1], 'mousemove', z);
+    fire(document, 'mouseup', z);
+    await wait(300);
+  }
+  if ('__THEME__' === 'dark') { document.documentElement.setAttribute('data-theme', 'dark'); await wait(150); }
+  await wait(300);
+})();
+</script>
+"""
+
+SCRIPT = BOARD if SCENARIO == 'board' else CELLSEL if SCENARIO == 'cellsel' else ABOUT
 
 
 def main() -> int:

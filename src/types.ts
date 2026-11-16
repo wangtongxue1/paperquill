@@ -92,6 +92,9 @@ export interface Note {
   attachments: Attachment[];
   /** 这篇笔记里的画板（可选字段，老存档没有也照常读）。 */
   boards?: BoardDoc[];
+  /** 2.5.14：隐藏。只在「隐藏笔记」视图里出现，不进全部笔记 / 搜索 / 任务 / 文件 / 提醒。
+   *  属于界面级隐藏（防止别人翻列表看到），不做加密；正文仍以明文存在本机存档里。 */
+  hidden?: boolean;
 }
 
 export interface Notebook {
@@ -255,6 +258,7 @@ export type NavSelection =
   | { kind: 'pinned' }
   | { kind: 'trash' }
   | { kind: 'reminders' }
+  | { kind: 'hidden' }
   | { kind: 'untagged' }
   | { kind: 'tasks' }
   | { kind: 'files' }
@@ -268,5 +272,6 @@ export type NavSelection =
 export const FULL_VIEW_KINDS = ['home', 'tasks', 'files', 'calendar', 'templates'] as const;
 
 export const MAX_VERSIONS = 15;
-/** v3：内置模板换文案/图标（迁移时按 id 刷新，自定义模板原样保留）。 */
-export const WORKSPACE_VERSION = 3;
+/** v3：内置模板换文案/图标（迁移时按 id 刷新，自定义模板原样保留）。
+ *  v4：笔记增加 hidden（隐藏）字段，老档补 false，笔记内容不动。 */
+export const WORKSPACE_VERSION = 4;

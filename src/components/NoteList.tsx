@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import {
   ArrowUpDown, Bell, CheckSquare, FileDown, FileText, LayoutGrid, LayoutList,
   MoreHorizontal, Paperclip, Pin, Plus, SearchX, Star, Tag, Trash2, RotateCcw,
-  Copy, FolderInput, X, Archive, Info, History, Bookmark, Link2, FileSearch,
+  Copy, FolderInput, X, Archive, Info, History, Bookmark, Link2, FileSearch, Eye, EyeOff,
 } from 'lucide-react';
 import { useApp } from '../context';
 import type { Note, NavSelection, SortKey } from '../types';
@@ -24,6 +24,7 @@ function navTitle(nav: NavSelection, ctx: { notebookName?: string; savedName?: s
     case 'pinned': return '置顶';
     case 'reminders': return '提醒';
     case 'trash': return '回收站';
+    case 'hidden': return '隐藏笔记';
     case 'untagged': return '无标签';
     case 'tag': return `# ${nav.name}`;
     case 'notebook': return ctx.notebookName || '笔记本';
@@ -79,6 +80,13 @@ export default function NoteList() {
         onClick: () => (many ? actions.patchNotes(ids, { favorite: !note.favorite }) : actions.toggleFlag(note.id, 'favorite')),
       },
       {
+        label: many
+          ? (note.hidden ? `取消隐藏这 ${ids.length} 篇` : `隐藏这 ${ids.length} 篇`)
+          : (note.hidden ? '取消隐藏' : '隐藏这篇笔记'),
+        icon: note.hidden ? <Eye size={14} /> : <EyeOff size={14} />,
+        onClick: () => actions.setHidden(ids, !note.hidden),
+      },
+      {
         label: ws.shortcuts.some((s) => s.kind === 'note' && s.refId === note.id) ? '从快捷方式移除' : '添加到快捷方式',
         icon: <Bookmark size={14} />, onClick: () => actions.toggleShortcut('note', note.id, note.title || '未命名笔记'),
       },
@@ -120,6 +128,7 @@ export default function NoteList() {
 
   const bulk = selectedIds.length > 0;
   const trashView = nav.kind === 'trash';
+  const hiddenView = nav.kind === 'hidden';
 
   return (
     <section className="notelist" style={{ width: ws.settings.listWidth }}>
@@ -162,6 +171,16 @@ export default function NoteList() {
         </div>
       )}
 
+      {hiddenView && visibleNotes.length > 0 && (
+        <div className="list__notice list__notice--hidden">
+          <EyeOff size={14} /> 这些笔记不会出现在「全部笔记」和搜索结果里（只隐藏、未加密）
+          <button onClick={() => openDialog('confirm', {
+            title: '全部取消隐藏？', message: `${visibleNotes.length} 篇笔记会重新回到「全部笔记」。`,
+            confirmLabel: '全部取消隐藏', onConfirm: () => actions.setHidden(visibleNotes.map((n) => n.id), false),
+          })}>全部显示</button>
+        </div>
+      )}
+
       {bulk && (
         <div className="bulkbar">
           <span><CheckSquare size={15} /> 已选 {selectedIds.length} 篇</span>
@@ -180,6 +199,10 @@ export default function NoteList() {
               <>
                 <IconBtn title="置顶" onClick={() => actions.patchNotes(selectedIds, { pinned: true })}><Pin size={15} /></IconBtn>
                 <IconBtn title="收藏" onClick={() => actions.patchNotes(selectedIds, { favorite: true })}><Star size={15} /></IconBtn>
+                <IconBtn title={hiddenView ? '取消隐藏' : '隐藏（不在全部笔记里显示）'}
+                  onClick={() => actions.setHidden(selectedIds, !hiddenView)}>
+                  {hiddenView ? <Eye size={15} /> : <EyeOff size={15} />}
+                </IconBtn>
                 <IconBtn title="移到回收站" danger onClick={() => actions.trash(selectedIds)}><Trash2 size={15} /></IconBtn>
               </>
             )}
@@ -191,11 +214,14 @@ export default function NoteList() {
       <div className={`list__scroll ${ws.settings.view === 'card' ? 'is-card' : ''}`}>
         {visibleNotes.length === 0 ? (
           <Empty
-            icon={query.trim() ? <SearchX size={34} /> : <FileText size={34} />}
-            title={query.trim() ? '没有匹配的笔记' : trashView ? '回收站是空的' : '这里还没有笔记'}
-            desc={query.trim() ? '换个关键词，或清空搜索看看全部笔记。' : '新建一篇，或导入已有的 Markdown / ENEX 文件。'}
+            icon={query.trim() ? <SearchX size={34} /> : hiddenView ? <EyeOff size={34} /> : <FileText size={34} />}
+            title={query.trim() ? '没有匹配的笔记' : trashView ? '回收站是空的' : hiddenView ? '没有隐藏的笔记' : '这里还没有笔记'}
+            desc={query.trim() ? '换个关键词，或清空搜索看看全部笔记。'
+              : hiddenView ? '在笔记上点右键 →「隐藏这篇笔记」，它就不会出现在全部笔记和搜索结果里了。'
+              : '新建一篇，或导入已有的 Markdown / ENEX 文件。'}
             action={query.trim()
               ? <Btn variant="subtle" onClick={() => setQuery('')}>清空搜索</Btn>
+              : hiddenView ? undefined
               : <Btn variant="primary" onClick={() => actions.createNote()}><Plus size={15} /> 新建笔记</Btn>}
           />
         ) : ws.settings.view === 'card' ? (
@@ -235,6 +261,7 @@ export default function NoteList() {
                   <h3 dangerouslySetInnerHTML={{ __html: highlight(note.title || '未命名笔记', query) }} />
                   {note.pinned && <Pin size={13} className="flag" />}
                   {note.reminderAt && !note.reminderDone && <Bell size={13} className="flag flag--bell" />}
+                  {note.hidden && <EyeOff size={13} className="flag" />}
                   {note.attachments.length > 0 && <span className="flag-inline"><Paperclip size={12} />{note.attachments.length}</span>}
                 </div>
                 <p className="note-row__excerpt"

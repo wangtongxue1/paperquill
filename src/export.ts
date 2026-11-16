@@ -8,10 +8,11 @@ import JSZip from 'jszip';
 import type { Note } from './types';
 import { exportSingle } from './io';
 import { noteToPdfBlob } from './pdf';
+import { noteToDocxBlob } from './docx-export';
 import { storage } from './storage';
 import { formatDateTime, slugify } from './utils';
 
-export type ExportFormat = 'md' | 'html' | 'pdf' | 'txt' | 'enex';
+export type ExportFormat = 'md' | 'html' | 'docx' | 'pdf' | 'txt' | 'enex';
 
 export interface ExportFormatMeta {
   id: ExportFormat;
@@ -33,6 +34,10 @@ export const EXPORT_FORMATS: ExportFormatMeta[] = [
     desc: '带样式的独立网页，双击就能看，不依赖纸间笔记',
   },
   {
+    id: 'docx', label: 'Word', ext: 'docx', many: true,
+    desc: '真正的 .docx：标题、表格、图片、列表都保留，Word / WPS 打开就能接着改',
+  },
+  {
     id: 'pdf', label: 'PDF', ext: 'pdf', many: false,
     desc: '按 A4 排版，版面与屏幕一致；图像型 PDF，适合归档与打印',
   },
@@ -52,6 +57,7 @@ const MIME: Record<ExportFormat, string> = {
   txt: 'text/plain;charset=utf-8',
   enex: 'application/xml;charset=utf-8',
   pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 };
 
 const baseOf = (note: Note) => slugify(note.title || '未命名笔记');
@@ -84,6 +90,12 @@ export async function exportNotes(notes: Note[], format: ExportFormat, all: Note
       await storage.saveBinary(name, await blobToBase64(blob), MIME.pdf);
       return { name, count: 1 };
     }
+    if (format === 'docx') {
+      const blob = await noteToDocxBlob(note);
+      const name = `${baseOf(note)}.docx`;
+      await storage.saveBinary(name, await blobToBase64(blob), MIME.docx);
+      return { name, count: 1 };
+    }
     const name = `${baseOf(note)}.${format}`;
     await storage.saveText(name, exportSingle(note, format, all), MIME[format]);
     return { name, count: 1 };
@@ -103,7 +115,14 @@ export async function exportNotes(notes: Note[], format: ExportFormat, all: Note
     const base = baseOf(note);
     const n = (seen.get(base) ?? 0) + 1;
     seen.set(base, n);
-    zip.file(`${base}${n > 1 ? `-${n}` : ''}.${format}`, exportSingle(note, format, all));
+    const file = `${base}${n > 1 ? `-${n}` : ''}.${format}`;
+    // docx 是二进制，其余格式都是文本源码。
+    if (format === 'docx') {
+      const blob = await noteToDocxBlob(note);
+      zip.file(file, new Uint8Array(await blob.arrayBuffer()));
+    } else {
+      zip.file(file, exportSingle(note, format, all));
+    }
   }
   const b64 = await zip.generateAsync({ type: 'base64' });
   const name = `纸间笔记-${notes.length}篇-${stamp}-${format}.zip`;

@@ -20,7 +20,7 @@ import { normalizeMediaUrl, fileKindOf, fileBadgeLabel } from '../media';
 import type { Attachment } from '../types';
 import { IconBtn, Menu, type MenuItem } from './Common';
 import DateTimePop, { type Anchor, type Bounds } from './DateTimePop';
-import { cellAround, TableMap } from '@tiptap/pm/tables';
+import { cellFullyMarked, cellSelInfo } from '../table-select';
 
 const HILITE_COLORS = ['#fff3a3', '#c9f0d6', '#cfe4fb', '#fbd6e3', '#ffe0bd', '#e6dcfb'];
 const FONT_SIZES: { label: string; value: string }[] = [
@@ -281,11 +281,6 @@ const RichEditor = forwardRef<RichEditorHandle, Props>(function RichEditor(props
     const items: MenuItem[] = [
       { label: '插入 3 × 3 表格', icon: <Table2 size={14} />, onClick: () => run((c) => c.insertTable({ rows: 3, cols: 3, withHeaderRow: true })) },
       { label: '', divider: true },
-      { label: '选中整个表格', icon: <Table2 size={14} />, disabled: !inTable, onClick: () => selectTablePart('table') },
-      { label: '选中整行', icon: <Table2 size={14} />, disabled: !inTable, onClick: () => selectTablePart('row') },
-      { label: '选中整列', icon: <Table2 size={14} />, disabled: !inTable, onClick: () => selectTablePart('column') },
-      { label: '选中后可用工具栏的字体 / 字号 / 颜色 / 加粗统一改格式', disabled: true },
-      { label: '', divider: true },
       { label: '在上方插入行', icon: <Plus size={14} />, onClick: () => run((c) => c.addRowBefore()) },
       { label: '在下方插入行', icon: <Plus size={14} />, onClick: () => run((c) => c.addRowAfter()) },
       { label: '在左侧插入列', icon: <Plus size={14} />, onClick: () => run((c) => c.addColumnBefore()) },
@@ -297,6 +292,7 @@ const RichEditor = forwardRef<RichEditorHandle, Props>(function RichEditor(props
       { label: '', divider: true },
       { label: '删除整个表格', icon: <Trash2 size={14} />, danger: true, onClick: () => run((c) => c.deleteTable()) },
       { label: '', divider: true },
+      { label: '表里拖动可选多格，Ctrl+A 选整表，再用工具栏改格式', disabled: true },
       { label: '拖动列边界可调整列宽', disabled: true },
     ];
     if (!inTable) items.splice(1, 0, { label: '光标不在表格里时，只有第一项可用', divider: true });
@@ -304,37 +300,33 @@ const RichEditor = forwardRef<RichEditorHandle, Props>(function RichEditor(props
     setMenu({ x: r.left, y: r.bottom + 4, items });
   };
 
-  /** 选中表格的一部分（整表 / 整行 / 整列），选中后工具栏的格式命令全部生效。 */
-  const selectTablePart = (kind: 'table' | 'row' | 'column') => {
-    const { selection } = editor.state;
-    const $from = cellAround(selection.$from);
-    const $to = cellAround(selection.$to) || $from;
-    if (!$from || !$to) return;
-    const table = $from.node(-1);
-    const start = $from.start(-1);
-    const map = TableMap.get(table);
-    const idxA = map.map.indexOf($from.pos - start);
-    const idxB = map.map.indexOf($to.pos - start);
-    if (idxA < 0 || idxB < 0) return;
-    const first = Math.min(idxA, idxB);
-    const last = Math.max(idxA, idxB);
-    let anchor: number;
-    let head: number;
-    if (kind === 'table') {
-      anchor = start + map.map[0];
-      head = start + map.map[map.map.length - 1];
-    } else if (kind === 'row') {
-      const rowA = Math.floor(first / map.width);
-      const rowB = Math.floor(last / map.width);
-      anchor = start + map.map[rowA * map.width];
-      head = start + map.map[rowB * map.width + map.width - 1];
-    } else {
-      const colA = first % map.width;
-      const colB = last % map.width;
-      anchor = start + map.map[colA];
-      head = start + map.map[map.map.length - map.width + colB];
-    }
-    editor.chain().focus().setCellSelection({ anchorCell: anchor, headCell: head }).run();
+  /** 框选的单元格信息（每格区间 + 整块选区两端），见 table-select.ts。 */
+  const cells = cellSelInfo(editor.state);
+  const cellCount = cells?.ranges.length ?? 0;
+
+  /** 格式命令统一入口：框选了多格就逐格应用（一条事务、一次撤销），否则走普通选区。 */
+  const styleCmd = (fn: (c: ReturnType<Editor['chain']>) => ReturnType<Editor['chain']>) => {
+    const info = cellSelInfo(editor.state);
+    if (!info) { run(fn); return; }
+    let c = editor.chain().focus();
+    for (const r of info.ranges) c = fn(c.setTextSelection({ from: r.from, to: r.to }));
+    // marks / 对齐都不改变文档长度，原来的整块选区位置依旧有效，改完接着框着。
+    c.setCellSelection({ anchorCell: info.anchor, headCell: info.head }).run();
+  };
+
+  /** 清除格式：普通选区连段落结构一起归位；表格里框选多格时只清行内格式（不动表格结构）。 */
+  const clearFormat = () => {
+    if (cellSelInfo(editor.state)) styleCmd((c) => c.unsetAllMarks());
+    else run((c) => c.unsetAllMarks().clearNodes());
+  };
+
+  /** 加粗这类开关：整块框选时按「是否全部已生效」统一置位，
+   *  免得一半格子被加上、另一半被取消（Word / 飞书都是这么做的）。 */
+  const toggleMarkEverywhere = (mark: string) => {
+    const info = cellSelInfo(editor.state);
+    if (!info) { run((c) => c.toggleMark(mark)); return; }
+    const all = info.ranges.every((r) => cellFullyMarked(r.node, mark));
+    styleCmd((c) => (all ? c.unsetMark(mark) : c.setMark(mark)));
   };
 
   const applyLink = () => {
@@ -561,13 +553,13 @@ const RichEditor = forwardRef<RichEditorHandle, Props>(function RichEditor(props
         <IconBtn title="撤销 (Ctrl+Z)" onClick={() => run((c) => c.undo())}><Undo2 size={15} /></IconBtn>
         <IconBtn title="重做 (Ctrl+Y)" onClick={() => run((c) => c.redo())}><Redo2 size={15} /></IconBtn>
         <span className="toolbar__sep" />
-        <IconBtn title="加粗 (Ctrl+B)" active={editor.isActive('bold')} onClick={() => run((c) => c.toggleBold())}><Bold size={15} /></IconBtn>
-        <IconBtn title="斜体 (Ctrl+I)" active={editor.isActive('italic')} onClick={() => run((c) => c.toggleItalic())}><Italic size={15} /></IconBtn>
-        <IconBtn title="下划线 (Ctrl+U)" active={editor.isActive('underline')} onClick={() => run((c) => c.toggleUnderline())}><Underline size={15} /></IconBtn>
-        <IconBtn title="删除线" active={editor.isActive('strike')} onClick={() => run((c) => c.toggleStrike())}><Strikethrough size={15} /></IconBtn>
-        <IconBtn title="行内代码" active={editor.isActive('code')} onClick={() => run((c) => c.toggleCode())}><Code2 size={15} /></IconBtn>
-        <IconBtn title="上标" active={editor.isActive('superscript')} onClick={() => run((c) => c.toggleSuperscript())}><Superscript size={15} /></IconBtn>
-        <IconBtn title="下标" active={editor.isActive('subscript')} onClick={() => run((c) => c.toggleSubscript())}><Subscript size={15} /></IconBtn>
+        <IconBtn title="加粗 (Ctrl+B)" active={editor.isActive('bold')} onClick={() => toggleMarkEverywhere('bold')}><Bold size={15} /></IconBtn>
+        <IconBtn title="斜体 (Ctrl+I)" active={editor.isActive('italic')} onClick={() => toggleMarkEverywhere('italic')}><Italic size={15} /></IconBtn>
+        <IconBtn title="下划线 (Ctrl+U)" active={editor.isActive('underline')} onClick={() => toggleMarkEverywhere('underline')}><Underline size={15} /></IconBtn>
+        <IconBtn title="删除线" active={editor.isActive('strike')} onClick={() => toggleMarkEverywhere('strike')}><Strikethrough size={15} /></IconBtn>
+        <IconBtn title="行内代码" active={editor.isActive('code')} onClick={() => toggleMarkEverywhere('code')}><Code2 size={15} /></IconBtn>
+        <IconBtn title="上标" active={editor.isActive('superscript')} onClick={() => toggleMarkEverywhere('superscript')}><Superscript size={15} /></IconBtn>
+        <IconBtn title="下标" active={editor.isActive('subscript')} onClick={() => toggleMarkEverywhere('subscript')}><Subscript size={15} /></IconBtn>
         <span className="toolbar__sep" />
         <IconBtn title="一级标题" active={editor.isActive('heading', { level: 1 })} onClick={() => run((c) => c.toggleHeading({ level: 1 }))}><Heading1 size={15} /></IconBtn>
         <IconBtn title="二级标题" active={editor.isActive('heading', { level: 2 })} onClick={() => run((c) => c.toggleHeading({ level: 2 }))}><Heading2 size={15} /></IconBtn>
@@ -590,8 +582,7 @@ const RichEditor = forwardRef<RichEditorHandle, Props>(function RichEditor(props
         <select className="toolbar__select" value={fontFamily} title="字体"
           onChange={(e) => {
             const v = e.target.value;
-            if (v === 'inherit') run((c) => c.unsetFontFamily());
-            else run((c) => c.setFontFamily(v));
+            styleCmd((c) => (v === 'inherit' ? c.unsetFontFamily() : c.setFontFamily(v)));
             onPreference({ fontFamily: v });
           }}>
           <option value="inherit">默认字体</option>
@@ -604,13 +595,13 @@ const RichEditor = forwardRef<RichEditorHandle, Props>(function RichEditor(props
         <select className="toolbar__select toolbar__select--sm" value={fontSize} title="字号"
           onChange={(e) => {
             const v = e.target.value;
-            run((c) => c.setFontSize(v));
+            styleCmd((c) => c.setFontSize(v));
             onPreference({ fontSize: v });
           }}>
           {FONT_SIZES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
         </select>
         <input className="toolbar__color" type="color" defaultValue="#2b3230" title="文字颜色"
-          onChange={(e) => run((c) => c.setColor(e.target.value))} />
+          onChange={(e) => styleCmd((c) => c.setColor(e.target.value))} />
         <span className="hilite-wrap">
           <button className={`icon-btn ${hiliteOpen ? 'is-active' : ''}`} title="高亮（6 色）"
             onClick={() => setHiliteOpen((v) => !v)}><Highlighter size={15} /></button>
@@ -620,22 +611,27 @@ const RichEditor = forwardRef<RichEditorHandle, Props>(function RichEditor(props
               <div className="hilite-pop">
                 {HILITE_COLORS.map((c) => (
                   <button key={c} title="高亮" style={{ background: c }}
-                    onClick={() => { run((chain) => chain.toggleHighlight({ color: c })); setHiliteOpen(false); }} />
+                    onClick={() => { styleCmd((chain) => chain.setHighlight({ color: c })); setHiliteOpen(false); }} />
                 ))}
                 <button className="hilite-pop__none" title="取消高亮"
-                  onClick={() => { run((chain) => chain.unsetHighlight()); setHiliteOpen(false); }}>无</button>
+                  onClick={() => { styleCmd((chain) => chain.unsetHighlight()); setHiliteOpen(false); }}>无</button>
               </div>
             </>
           )}
         </span>
         <span className="toolbar__sep" />
-        <IconBtn title="左对齐" active={editor.isActive({ textAlign: 'left' })} onClick={() => run((c) => c.setTextAlign('left'))}><AlignLeft size={15} /></IconBtn>
-        <IconBtn title="居中" active={editor.isActive({ textAlign: 'center' })} onClick={() => run((c) => c.setTextAlign('center'))}><AlignCenter size={15} /></IconBtn>
-        <IconBtn title="右对齐" active={editor.isActive({ textAlign: 'right' })} onClick={() => run((c) => c.setTextAlign('right'))}><AlignRight size={15} /></IconBtn>
-        <IconBtn title="清除格式" onClick={() => run((c) => c.unsetAllMarks().clearNodes())}><Eraser size={15} /></IconBtn>
+        <IconBtn title="左对齐" active={editor.isActive({ textAlign: 'left' })} onClick={() => styleCmd((c) => c.setTextAlign('left'))}><AlignLeft size={15} /></IconBtn>
+        <IconBtn title="居中" active={editor.isActive({ textAlign: 'center' })} onClick={() => styleCmd((c) => c.setTextAlign('center'))}><AlignCenter size={15} /></IconBtn>
+        <IconBtn title="右对齐" active={editor.isActive({ textAlign: 'right' })} onClick={() => styleCmd((c) => c.setTextAlign('right'))}><AlignRight size={15} /></IconBtn>
+        <IconBtn title="清除格式" onClick={clearFormat}><Eraser size={15} /></IconBtn>
         <IconBtn title="插入日期时间（可点开选择具体时刻）" onClick={openTimeInsert}>
           <CalendarClock size={15} />
         </IconBtn>
+        {cellCount > 0 && (
+          <span className="toolbar__cellsel" title="在表格里拖动可以选多格，Ctrl+A 选中整张表">
+            <Table2 size={13} /> 已选 {cellCount} 格 · 上面这些格式按钮会一次改完
+          </span>
+        )}
         {editor.isActive('codeBlock') && (
           <select className="toolbar__select" value={(editor.getAttributes('codeBlock').lang as string) || lang}
             title="代码块语言"

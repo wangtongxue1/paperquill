@@ -57,7 +57,7 @@ function HomeView() {
     [next[i], next[j]] = [next[j], next[i]];
     actions.setSettings({ homeLayout: next });
   };
-  const live = ws.notes.filter((n) => !n.trashed);
+  const live = ws.notes.filter((n) => !n.trashed && !n.hidden);
   const recent = [...live].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 6);
   const tasks = collectTasks(live);
   const undone = tasks.filter((t) => !t.done);
@@ -236,7 +236,7 @@ function HomeView() {
 function TasksView() {
   const { ws, actions, setActiveId, setNav } = useApp();
   const [filter, setFilter] = useState<'all' | 'open' | 'done'>('all');
-  const tasks = useMemo(() => collectTasks(ws.notes), [ws.notes]);
+  const tasks = useMemo(() => collectTasks(ws.notes.filter((n) => !n.trashed && !n.hidden)), [ws.notes]);
   const shown = tasks.filter((t) => filter === 'all' || (filter === 'open' ? !t.done : t.done));
   const doneCount = tasks.filter((t) => t.done).length;
   const groups = useMemo(() => {
@@ -306,7 +306,7 @@ function FilesView() {
   const [kind, setKind] = useState<'all' | 'image' | 'media' | 'board' | 'file'>('all');
   const files = useMemo(() => {
     const out: { note: Note; id: string; name: string; kind: string; mime: string; size: number; dataUrl: string; createdAt: number }[] = [];
-    for (const n of ws.notes.filter((x) => !x.trashed)) {
+    for (const n of ws.notes.filter((x) => !x.trashed && !x.hidden)) {
       for (const a of n.attachments || []) {
         out.push({ note: n, id: a.id, name: a.name, kind: a.kind, mime: a.mime, size: a.size, dataUrl: a.dataUrl, createdAt: a.createdAt });
       }
@@ -375,7 +375,7 @@ function CalendarView() {
   const { ws, setActiveId, setNav, actions } = useApp();
   const [cursor, setCursor] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [picked, setPicked] = useState(() => formatDate(Date.now()));
-  const live = ws.notes.filter((n) => !n.trashed);
+  const live = ws.notes.filter((n) => !n.trashed && !n.hidden);
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
   const first = new Date(year, month, 1);

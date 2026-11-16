@@ -500,6 +500,19 @@ mark { background: #FBE6A2; color: inherit; border-radius: 2px; padding: 0 1px; 
 }
 .prose .column-resize-dragging { background: var(--brand-soft); }
 .ProseMirror.resize-cursor { cursor: col-resize !important; }
+/* 单元格框选（prosemirror-tables 的 CellSelection）：给选中的格子铺一层品牌色底，
+   不然拖完看不出到底选中了哪几格，也就不知道格式会作用到哪儿。 */
+.prose .selectedCell::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: var(--brand); opacity: .13;
+}
+[data-theme="dark"] .prose .selectedCell::after { opacity: .26; }
+/* 工具栏上的「已选中 N 格」提示：只在表格框选时出现。 */
+.toolbar__cellsel {
+  display: inline-flex; align-items: center; gap: 5px; margin-left: 8px;
+  padding: 3px 9px; border-radius: 99px; font-size: 11px; white-space: nowrap;
+  background: var(--brand-soft); color: var(--brand-strong); font-weight: 600;
+}
 .prose img { max-width: 100%; height: auto; border-radius: 8px; margin: 8px 0; border: 1px solid var(--border); }
 .editor__rich img { transition: box-shadow .12s; }
 .editor__rich img:hover { box-shadow: 0 0 0 2px var(--brand-soft); }

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
-  Archive, Bell, BookOpen, CalendarDays, ChevronDown, ChevronRight, Database, FileText,
+  Archive, Bell, BookOpen, CalendarDays, ChevronDown, ChevronRight, Database, EyeOff, FileText,
   Folder, FolderPlus, FolderTree, Hash, Home, LayoutTemplate, ListTodo, MoreHorizontal,
   Paperclip, PanelLeftClose, Pin, Plus, Search, Settings2, Star, Tag, Trash2, Wand2, X,
 } from 'lucide-react';
@@ -30,7 +30,10 @@ export default function Sidebar() {
   const [collapsedTags, setCollapsedTags] = useState<Set<string>>(new Set());
   const [createMenu, setCreateMenu] = useState(false);
 
-  const live = ws.notes.filter((n) => !n.trashed);
+  // 隐藏笔记不进任何汇总（全部笔记 / 标签 / 笔记本计数 / 任务 / 文件），
+  // 只在下面单独一行「隐藏笔记」里露头。
+  const live = ws.notes.filter((n) => !n.trashed && !n.hidden);
+  const hiddenCount = ws.notes.filter((n) => !n.trashed && n.hidden).length;
   const sections = ws.sidebarSections;
   const count = {
     all: live.length,
@@ -186,6 +189,7 @@ export default function Sidebar() {
             {mainRow('favorites', <Star size={16} />, '收藏', count.favorites)}
             {mainRow('pinned', <Pin size={16} />, '置顶', count.pinned)}
             {mainRow('reminders', <Bell size={16} />, '提醒', count.reminders)}
+            {hiddenCount > 0 && mainRow('hidden', <EyeOff size={16} />, '隐藏笔记', hiddenCount)}
           </section>
         )}
 
@@ -197,7 +201,9 @@ export default function Sidebar() {
             </div>
             {ws.shortcuts.length === 0 && ws.savedSearches.length === 0 &&
               <div className="nav-group__empty">右键笔记或标签可固定到这里</div>}
-            {ws.shortcuts.map((s) => (
+            {/* 指向隐藏笔记的快捷方式不显示，否则侧栏把标题又露出来了 */}
+            {ws.shortcuts.filter((sc) => sc.kind !== 'note'
+              || !ws.notes.find((n) => n.id === sc.refId)?.hidden).map((s) => (
               <div key={s.id} className="nav-row nav-row--shortcut"
                 onClick={() => {
                   if (s.kind === 'note') { setActiveId(s.refId); setNav({ kind: 'all' }); }

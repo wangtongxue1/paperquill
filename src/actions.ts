@@ -23,6 +23,8 @@ export interface Actions {
   createNote: (opts?: CreateOpts) => string;
   updateNote: (id: string, patch: Partial<Note>) => void;
   patchNotes: (ids: string[], patch: Partial<Note>) => void;
+  /** 隐藏 / 取消隐藏：隐藏的笔记不进全部笔记、搜索与各处汇总。 */
+  setHidden: (ids: string[], hidden: boolean) => void;
   toggleFlag: (id: string, key: 'pinned' | 'favorite' | 'reminderDone') => void;
   moveNotes: (ids: string[], notebookId: string | null) => void;
   addTagTo: (ids: string[], tag: string) => void;
@@ -146,6 +148,19 @@ export function createActions(deps: Deps): Actions {
     patchNotes(ids, patch) {
       if (!ids.length) return;
       mutate((d) => touch(d, ids, patch));
+    },
+
+    setHidden(ids, hidden) {
+      if (!ids.length) return;
+      // 隐藏不是内容修改：不动 updatedAt，否则取消隐藏后笔记会莫名其妙跳到列表最前。
+      const set = new Set(ids);
+      mutate((d) => {
+        d.notes = d.notes.map((n) => (set.has(n.id) ? { ...n, hidden } : n));
+      });
+      setSelectedIds([]);
+      toast(hidden
+        ? `已隐藏 ${ids.length} 篇笔记，可在侧栏「隐藏笔记」里找回`
+        : `已取消隐藏 ${ids.length} 篇笔记`);
     },
 
     toggleFlag(id, key) {
