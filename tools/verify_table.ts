@@ -275,12 +275,19 @@ try {
   const edJh = mount(jHl.back);
   check('J 编辑器里无表头表原样还原', edJh.view.dom.querySelectorAll('td').length === 4 && edJh.view.dom.querySelectorAll('th').length === 0,
     `td=${edJh.view.dom.querySelectorAll('td').length} th=${edJh.view.dom.querySelectorAll('th').length}`);
-  // 拖过列宽（col 有 width 样式）：保留 HTML 并换成 TipTap 认的 width 属性
-  rt('colwidth', `<table><colgroup><col style="width: 120.4px;"><col style="min-width: 48px;"></colgroup><thead><tr><th><p>甲</p></th><th><p>乙</p></th></tr></thead>`
+  // 拖过列宽（col 有 width 样式）但内容简单：转成管道表 + 列宽注释，切回后列宽还原
+  const jCw = rt('colwidth', `<table><colgroup><col style="width: 120.4px;"><col style="min-width: 48px;"></colgroup><thead><tr><th><p>甲</p></th><th><p>乙</p></th></tr></thead>`
     + `<tbody><tr><td><p>1</p></td><td><p>2</p></td></tr></tbody></table>`, [
-    ['拖过列宽保留 HTML', (md) => md.includes('<table')],
-    ['列宽换算成 width 属性', (_md, back) => back.includes('width="120"')],
+    ['源码是可读管道表', (md) => md.includes('| 甲 | 乙 |') && md.includes('| 1 | 2 |') && !md.includes('<table')],
+    ['列宽写在注释里', (md) => md.includes('<!-- table-colwidth: 120,- -->')],
+    ['切回后列宽还原 width="120"', (_md, back) => back.includes('<col width="120">')],
   ]);
+  mark('J-mount-colwidth');
+  const edJc = mount(jCw.back);
+  const jcHtml = edJc.getHTML();
+  check('J 编辑器认回列宽（渲染成 style width:120px）', jcHtml.includes('width: 120px'), jcHtml.slice(0, 300));
+  const mdJc2 = htmlToMd(jcHtml);
+  check('J 列宽表二次往返不漂移', mdJc2 === jCw.md, `p1=${jCw.md.replace(/\n/g, '⏎')} p2=${mdJc2.replace(/\n/g, '⏎')}`);
   // 单元格多段落：管道压行会毁结构，保留 HTML
   rt('multiPara', `<table><thead><tr><th><p>甲</p></th><th><p>乙</p></th></tr></thead><tbody><tr><td><p>第一段</p><p>第二段</p></td><td><p>普通</p></td></tr></tbody></table>`, [
     ['富内容格保留 HTML', (md) => md.includes('<table') && md.includes('第二段')],

@@ -262,15 +262,66 @@ function pipeSafeCell(el: HTMLElement): boolean {
   return !p.querySelector('ul,ol,pre,blockquote,table,div,h1,h2,h3,h4,h5,h6,video,audio,br');
 }
 
-/** 管道表表达不了的表格（无表头 / 富内容格 / 拖过列宽）保留原始 HTML。
+/** 管道表表达不了的表格（无表头 / 格内多段或列表）保留原始 HTML，
  *  顺带把 TipTap 渲染的列宽 style="width: 97.1px" 换成它解析时认的 <col width="97">。 */
 function tableOuterHtml(table: HTMLTableElement): string {
   const clone = table.cloneNode(true) as HTMLTableElement;
   clone.querySelectorAll('colgroup > col').forEach((col) => {
-    const m = (col.getAttribute('style') || '').match(/(^|;)\s*width:\s*([\d.]+)px/);
-    if (m) col.setAttribute('width', String(Math.round(Number(m[2]))));
+    const style = col.getAttribute('style') || '';
+    const m = style.match(/(^|;)\s*width:\s*([\d.]+)px/);
+    if (m) {
+      col.setAttribute('width', String(Math.round(Number(m[2]))));
+      // 已换算成 width 属性的那段从 style 里去掉，避免 style="width:181px" width="181" 重复。
+      const rest = style
+        .replace(new RegExp(`(^|;)\\s*width:\\s*${m[2]}px\\s*;?`), '$1')
+        .replace(/^;+|;+$/g, '');
+      if (rest) col.setAttribute('style', rest);
+      else col.removeAttribute('style');
+    }
   });
   return clone.outerHTML;
+}
+
+/** 列宽注释：拖过列宽但内容简单的表格，源码存成可读的管道表，
+ *  每列拖过的像素宽写进表后这行注释，切回富文本时还原成 colgroup。 */
+const COLWIDTH_COMMENT = 'table-colwidth';
+
+/** colgroup 里每列的像素宽（没拖过的列记 '-'，切回时保持自动宽度）。 */
+function colWidthsOf(table: HTMLTableElement): string[] {
+  return Array.from(table.querySelectorAll('colgroup > col')).map((col) => {
+    const m = (col.getAttribute('style') || '').match(/(^|;)\s*width:\s*([\d.]+)px/);
+    if (m) return String(Math.round(Number(m[2])));
+    if (col.hasAttribute('width')) return col.getAttribute('width') || '-';
+    return '-';
+  });
+}
+
+/** 把源码里的列宽注释还原成表格的 <colgroup>（TipTap 解析时认 col[width]），并删掉注释。
+ *  marked 输出里注释紧跟在表格之后（</table>\n<!-- ... -->），所以往前找最近的表格注入。 */
+function resolveColwidthComments(html: string): string {
+  const re = new RegExp(`<!--\\s*${COLWIDTH_COMMENT}:\\s*([\\d\\-,\\s]+?)\\s*-->`, 'g');
+  let out = '';
+  let pos = 0;
+  for (const m of html.matchAll(re)) {
+    const idx: number = m.index ?? 0;
+    const before = html.slice(pos, idx);
+    out += before;
+    const openAt = before.lastIndexOf('<table');
+    const closeAt = before.lastIndexOf('</table>');
+    const gtRel = openAt >= 0 ? before.indexOf('>', openAt) : -1;
+    if (openAt >= 0 && closeAt > openAt && gtRel >= 0) {
+      // 把 colgroup 注进刚追加到 out 的表格开标签之后
+      const injectAt = out.length - (before.length - (gtRel + 1));
+      const cols = m[1]
+        .split(',')
+        .map((w) => (/^\d+$/.test(w.trim()) ? `<col width="${w.trim()}">` : '<col>'))
+        .join('');
+      out = `${out.slice(0, injectAt)}<colgroup>${cols}</colgroup>${out.slice(injectAt)}`;
+    }
+    pos = idx + m[0].length; // 注释本身不进结果
+  }
+  out += html.slice(pos);
+  return out;
 }
 
 turndown.addRule('gfmTable', {
@@ -283,10 +334,11 @@ turndown.addRule('gfmTable', {
       Array.from(tr.children).filter((el) => /^(TD|TH)$/.test(el.tagName)) as HTMLElement[];
     const hasHeader = rowCells(rows[0]).some((el) => el.tagName === 'TH');
     // GFM 管道表第一行必须是表头且每格只有一行行内文本；表达不了的
-    // （无表头 / 格内多段或列表 / 拖过列宽）保留 HTML，切回富文本完整还原。
+    // （无表头 / 格内多段或列表）保留 HTML，切回富文本完整还原。
+    // 拖过列宽不算障碍：内容简单时照转管道表，宽度写进表后的列宽注释。
     const hasFixedCol = !!Array.from(table.querySelectorAll('colgroup > col'))
       .find((col) => /(^|;)\s*width:\s*[\d.]+px/.test(col.getAttribute('style') || '') || col.hasAttribute('width'));
-    const pipeSafe = hasHeader && !hasFixedCol
+    const pipeSafe = hasHeader
       && rows.every((tr) => rowCells(tr).every(pipeSafeCell));
     if (!pipeSafe) return `\n\n${tableOuterHtml(table)}\n\n`;
     const grid = rows.map((tr) => rowCells(tr).map((el) => mdCellText(el as HTMLElement).replace(/\|/g, '\\|')));
@@ -300,7 +352,13 @@ turndown.addRule('gfmTable', {
       return `| ${cells.join(' | ')} |`;
     });
     // GFM 规定第一行就是表头，分隔行永远插在第一行之后。
-    return `\n\n${[lines[0], `| ${sepCells.join(' | ')} |`, ...lines.slice(1)].join('\n')}\n\n`;
+    let out = `\n\n${[lines[0], `| ${sepCells.join(' | ')} |`, ...lines.slice(1)].join('\n')}\n\n`;
+    // 拖过列宽：宽度跟在表后一行注释里，切回富文本时还原成列宽，源码保持管道可读。
+    if (hasFixedCol) {
+      const widths = colWidthsOf(table);
+      if (widths.some((w) => w !== '-')) out += `<!-- ${COLWIDTH_COMMENT}: ${widths.join(',')} -->\n\n`;
+    }
+    return out;
   },
 });
 
@@ -414,7 +472,7 @@ export function mdToHtml(md: string, attachments: Attachment[] = []): string {
   // 必须在 marked 之前还原：自定义 scheme 会被 DOMPurify 当成不安全 URI 丢掉。
   const resolved = resolveAttachmentRefs(renderWikilinks(md), attachments);
   const html = marked.parse(resolved, { async: false }) as string;
-  return annotateAttachmentNodes(markTasks(resolveAlignDivs(sanitizeHtml(html))), attachments);
+  return annotateAttachmentNodes(markTasks(resolveAlignDivs(sanitizeHtml(resolveColwidthComments(html)))), attachments);
 }
 
 export function htmlToMd(html: string, attachments: Attachment[] = []): string {
