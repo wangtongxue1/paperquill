@@ -219,6 +219,38 @@ try {
   check('H1 鼠标从 a1 拖到 b2 选中 4 格', selectedCells === 4 && (info?.ranges.length ?? 0) === 4,
     `dots=${selectedCells} ranges=${info?.ranges.length ?? 0}`);
 
+  /* ---------- I. 样式类格式往返（2.5.14 补：切源码不再丢下划线/颜色/对齐等） ---------- */
+  mark('I1');
+  const RICH_STYLE = `<h2 style="text-align:center">居中标题</h2>`
+    + `<p style="text-align:center">前<u>下划</u><s>删除</s><sub>下标</sub><sup>上标</sup>`
+    + `<mark style="background-color: #fff3b8">高亮</mark>`
+    + `<span style="color: #e03e3e">红字</span>`
+    + `<span style="font-size: 20px">大字</span>`
+    + `<span style="font-family: KaiTi">楷体</span></p>`;
+  const mdStyle = htmlToMd(RICH_STYLE);
+  out.push('I mdStyle = ' + mdStyle);
+  check('I1 删除线写成 ~~', mdStyle.includes('~~删除~~'), mdStyle);
+  check('I2 下划线保留 <u>', mdStyle.includes('<u>下划</u>'), mdStyle);
+  check('I3 高亮带底色', /<mark style="background-color: (#[0-9a-fA-F]+|rgb\([^)]+\))">高亮<\/mark>/.test(mdStyle), mdStyle);
+  check('I4 文字颜色/字号/字体进 span', mdStyle.includes('color: #e03e3e') && mdStyle.includes('font-size: 20px') && mdStyle.includes('font-family: KaiTi'), mdStyle);
+  check('I5 对齐包了 data-block-align', mdStyle.includes('data-block-align="center"') && (mdStyle.match(/data-block-align/g) || []).length === 2, mdStyle);
+
+  mark('I6');
+  const htmlStyle = mdToHtml(mdStyle);
+  check('I6 回到 HTML 后对齐还原到 h2/p', /<h2 style="[^"]*text-align: center/.test(htmlStyle) && /<p style="[^"]*text-align: center/.test(htmlStyle), htmlStyle.slice(0, 400));
+  check('I7 行内样式标签都在', htmlStyle.includes('<u>') && htmlStyle.includes('<del>') && htmlStyle.includes('<mark') && htmlStyle.includes('color: #e03e3e') && htmlStyle.includes('font-size: 20px') && htmlStyle.includes('KaiTi'), htmlStyle.slice(0, 400));
+
+  mark('I8');
+  const edI = mount(htmlStyle);
+  const htmlI = edI.getHTML();
+  check('I8 编辑器认回下划线/删除线/高亮', htmlI.includes('<u>') && htmlI.includes('<s>') && htmlI.includes('<mark'), htmlI.slice(0, 400));
+  check('I9 编辑器认回颜色/字号', (htmlI.includes('#e03e3e') || htmlI.includes('224, 62, 62')) && htmlI.includes('20px'), htmlI.slice(0, 400));
+  check('I10 标题/段落对齐被 TextAlign 认回', htmlI.includes('text-align: center') && (htmlI.match(/text-align: center/g) || []).length >= 2, htmlI.slice(0, 400));
+
+  mark('I11');
+  const mdStyle2 = htmlToMd(htmlI);
+  check('I11 再转一次源码仍齐全（不越切越丢）', mdStyle2.includes('~~删除~~') && mdStyle2.includes('<u>') && mdStyle2.includes('data-block-align="center"') && (mdStyle2.includes('#e03e3e') || mdStyle2.includes('224, 62, 62')), mdStyle2);
+
 } catch (err) {
   out.push(`CRASH: ${err}`);
 }

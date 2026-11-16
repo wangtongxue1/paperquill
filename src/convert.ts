@@ -57,7 +57,86 @@ turndown.addRule('taskCheckbox', {
   replacement: (_content, node) => ((node as HTMLInputElement).checked ? '[x] ' : '[ ] '),
 });
 
+// ---- 2.5.14 补：样式类格式的往返保留 ----
+// Markdown 表达不了下划线 / 高亮 / 颜色 / 字号 / 对齐 / 上下标，之前一切源码就全丢。
+// 现在：GFM 能表达的（删除线）写成 ~~...~~，表达不了的用 CommonMark 允许的
+// 行内 / 块级 HTML 原样带过去，切回富文本由 TipTap 的解析规则认回来。
+let inTableCell = false; // 表格单元格走 mdCellText 递归，块级对齐包装不进格子（列对齐已由分隔行表达）
+
+const KEEP_STYLE_PROPS = ['color', 'font-size', 'font-family', 'background-color'];
+
+// 删除线：GFM 标准写法。
+turndown.addRule('strikeThrough', {
+  filter: (node) => ['S', 'DEL', 'STRIKE'].includes(node.nodeName),
+  replacement: (content) => `~~${content.trim()}~~`,
+});
+
+// 下划线 / 上下标：Markdown 没有对应语法，保留原标签。
+turndown.addRule('keepInlineTag', {
+  filter: ['u', 'sub', 'sup'],
+  replacement: (content, node) => {
+    const tag = node.nodeName.toLowerCase();
+    return `<${tag}>${content.trim()}</${tag}>`;
+  },
+});
+
+// 高亮：TipTap 认 data-color 或 style 里的 background-color，写 style 就够了。
+turndown.addRule('keepHighlight', {
+  filter: (node) => node.nodeName === 'MARK',
+  replacement: (content, node) => {
+    const el = node as HTMLElement;
+    const color = el.getAttribute('data-color') || el.style.backgroundColor || '';
+    return color
+      ? `<mark style="background-color: ${color}">${content.trim()}</mark>`
+      : `<mark>${content.trim()}</mark>`;
+  },
+});
+
+// 文字颜色 / 字号 / 字体：span 只挑这几个可往返的属性带走，别把编辑器内部样式带进源码。
+turndown.addRule('keepTextStyle', {
+  filter: (node) =>
+    node.nodeName === 'SPAN' &&
+    KEEP_STYLE_PROPS.some((k) => ((node as HTMLElement).getAttribute('style') || '').toLowerCase().includes(k)),
+  replacement: (content, node) => {
+    const el = node as HTMLElement;
+    const kept = (el.getAttribute('style') || '')
+      .split(';')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .filter((p) => KEEP_STYLE_PROPS.some((k) => p.toLowerCase().startsWith(k)))
+      .join('; ');
+    return kept ? `<span style="${kept}">${content.trim()}</span>` : content;
+  },
+});
+
+const blockAlignOf = (el: HTMLElement) => {
+  const a = (el.style.textAlign || '').toLowerCase();
+  return a === 'center' || a === 'right' || a === 'justify' ? a : '';
+};
+
+// 段落 / 标题的对齐：Markdown 无法给块级元素带样式，包一层带 data-block-align 的 div，
+// mdToHtml 里再解包成 <p style="text-align:...">。列表 / 引用 / 表格里不动（会破坏容器结构）。
+turndown.addRule('keepBlockAlign', {
+  filter: (node) => {
+    if (inTableCell) return false;
+    if (!/^(P|H1|H2|H3|H4|H5|H6)$/.test(node.nodeName)) return false;
+    if ((node as HTMLElement).closest?.('blockquote, ol, ul')) return false;
+    return !!blockAlignOf(node as HTMLElement);
+  },
+  replacement: (content, node) => {
+    const el = node as HTMLElement;
+    const align = blockAlignOf(el);
+    const text = content.trim();
+    if (!text) return '';
+    // 标题的对齐不能丢级别：把 #/## 补回来，切回富文本还是 h1-h6。
+    const m = el.nodeName.match(/^H([1-6])$/);
+    const body = m ? `${'#'.repeat(Number(m[1]))} ${text}` : text;
+    return `\n\n<div data-block-align="${align}">\n\n${body}\n\n</div>\n\n`;
+  },
+});
+
 // 图片：带 data-att-id 或能反查到附件的，一律写回短引用，不把 base64 灌进源码。
+// 设了宽度 / 块级对齐的图片 Markdown 表达不了，改用 <img> 原样带走（src 仍用短引用）。
 turndown.addRule('attachmentImage', {
   filter: (node) => node.nodeName === 'IMG',
   replacement: (_content, node) => {
@@ -67,7 +146,29 @@ turndown.addRule('attachmentImage', {
     const id =
       el.getAttribute('data-att-id') ||
       currentAttachments.find((a) => a.dataUrl === src)?.id;
-    return `![${alt}](${id ? attachmentRef(id) : src})`;
+    const url = id ? attachmentRef(id) : src;
+    const width = (el.style?.width || '').match(/^[\d.]+%$/)?.[0] || '';
+    const display = el.style?.display || '';
+    const ml = el.style?.marginLeft || '';
+    const mr = el.style?.marginRight || '';
+    const isBlock = display === 'block';
+    const alignStyle =
+      isBlock && ml === 'auto' && mr === 'auto' ? 'display:block;margin-left:auto;margin-right:auto'
+      : isBlock && ml === 'auto' ? 'display:block;margin-left:auto;margin-right:0'
+      : isBlock ? 'display:block;margin-left:0;margin-right:auto'
+      : '';
+    if (width || alignStyle) {
+      const attrs = [
+        `src="${url}"`,
+        alt ? `alt="${alt.replace(/"/g, '&quot;')}"` : '',
+        id && id !== src ? `data-att-id="${id}"` : '',
+        [alignStyle, width ? `width:${width}` : ''].filter(Boolean).join(';')
+          ? `style="${[alignStyle, width ? `width:${width}` : ''].filter(Boolean).join(';')}"`
+          : '',
+      ].filter(Boolean).join(' ');
+      return `<img ${attrs}>`;
+    }
+    return `![${alt}](${url})`;
   },
 });
 
@@ -133,10 +234,13 @@ turndown.addRule('fencedCodeLang', {
 // 这里在 TABLE 层统一重建管道表：单元格文本递归交给 turndown（保住加粗/链接/图片），
 // 管道转义、列数补齐（跨列/缺列）、表头对齐（:--- / :---: / ---:）都还原。
 function mdCellText(el: HTMLElement): string {
+  inTableCell = true;
   try {
     return turndown.turndown(el.innerHTML.trim()).replace(/\s*\n\s*/g, ' ').trim();
   } catch {
     return (el.textContent || '').replace(/\s*\n\s*/g, ' ').trim();
+  } finally {
+    inTableCell = false;
   }
 }
 
@@ -175,7 +279,7 @@ turndown.addRule('gfmTable', {
 
 const PURIFY_OPTIONS = {
   ADD_ATTR: [
-    'data-wiki', 'data-att-id', 'data-task-line', 'data-lang', 'data-align',
+    'data-wiki', 'data-att-id', 'data-task-line', 'data-lang', 'data-align', 'data-block-align',
     'target', 'rel', 'class', 'data-time', 'data-board-id', 'datetime',
     'style', 'data-id', 'contenteditable', 'download', 'checked', 'type',
     'controls', 'poster', 'preload', 'playsinline', 'loop', 'muted',
@@ -249,11 +353,40 @@ function annotateAttachmentNodes(html: string, attachments: Attachment[]): strin
   return doc.body.innerHTML;
 }
 
+/** 把 htmlToMd 写出的 <div data-block-align> 解包回带 text-align 的段落 / 标题 / 图片，
+ *  这样切回富文本时 TipTap 的 TextAlign 规则能直接认回对齐。 */
+function resolveAlignDivs(html: string): string {
+  if (typeof DOMParser === 'undefined') return html;
+  const doc = new DOMParser().parseFromString(`<!doctype html><body>${html}</body>`, 'text/html');
+  doc.body.querySelectorAll('div[data-block-align]').forEach((div) => {
+    const align = div.getAttribute('data-block-align') || '';
+    for (const kid of Array.from(div.childNodes)) {
+      if (kid.nodeType === 1 && /^(P|H[1-6])$/.test((kid as Element).tagName)) {
+        (kid as HTMLElement).style.textAlign = align;
+      } else if (kid.nodeType === 1 && (kid as Element).tagName === 'IMG') {
+        // 图片的块级对齐走它自己的 display/margin 约定（AttachedImage.parseHTML 认这个）。
+        const img = kid as HTMLElement;
+        if (!img.style.width) img.style.width = 'auto';
+        img.style.display = 'block';
+        img.style.marginLeft = align === 'right' ? 'auto' : align === 'center' ? 'auto' : '0';
+        img.style.marginRight = align === 'left' ? '0' : 'auto';
+      } else if (kid.nodeType === 3 && (kid.textContent || '').trim()) {
+        const p = doc.createElement('p');
+        p.style.textAlign = align;
+        kid.replaceWith(p);
+        p.appendChild(kid);
+      }
+    }
+    div.replaceWith(...Array.from(div.childNodes));
+  });
+  return doc.body.innerHTML;
+}
+
 export function mdToHtml(md: string, attachments: Attachment[] = []): string {
   // 必须在 marked 之前还原：自定义 scheme 会被 DOMPurify 当成不安全 URI 丢掉。
   const resolved = resolveAttachmentRefs(renderWikilinks(md), attachments);
   const html = marked.parse(resolved, { async: false }) as string;
-  return annotateAttachmentNodes(markTasks(sanitizeHtml(html)), attachments);
+  return annotateAttachmentNodes(markTasks(resolveAlignDivs(sanitizeHtml(html))), attachments);
 }
 
 export function htmlToMd(html: string, attachments: Attachment[] = []): string {
