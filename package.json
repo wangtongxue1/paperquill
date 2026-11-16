@@ -1,7 +1,7 @@
 {
   "name": "zhijian-desktop",
   "private": true,
-  "version": "2.5.12",
+  "version": "2.5.13",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -31,6 +31,7 @@
     "@tiptap/pm": "^3.33.1",
     "@tiptap/react": "^3.33.1",
     "@tiptap/starter-kit": "^3.33.1",
+    "docx": "^9.15.4",
     "docx-preview": "0.4.1",
     "dompurify": "^3.2.4",
     "html2canvas": "^1.4.1",

@@ -20,6 +20,7 @@ import { normalizeMediaUrl, fileKindOf, fileBadgeLabel } from '../media';
 import type { Attachment } from '../types';
 import { IconBtn, Menu, type MenuItem } from './Common';
 import DateTimePop, { type Anchor, type Bounds } from './DateTimePop';
+import { cellAround, TableMap } from '@tiptap/pm/tables';
 
 const HILITE_COLORS = ['#fff3a3', '#c9f0d6', '#cfe4fb', '#fbd6e3', '#ffe0bd', '#e6dcfb'];
 const FONT_SIZES: { label: string; value: string }[] = [
@@ -50,6 +51,8 @@ interface Props {
   fontFamily: string;
   fontSize: string;
   onContent: (storedHtml: string) => void;
+  /** 编辑器失焦 / 窗口隐藏时立即把未落盘的草稿刷下去（不等待自动保存的 debounce）。 */
+  onCommit?: () => void;
   onFiles: (files: File[]) => void;
   onRequestFile: () => void;
   /** 只挑音频 / 视频。 */
@@ -68,7 +71,7 @@ interface Props {
 
 const RichEditor = forwardRef<RichEditorHandle, Props>(function RichEditor(props, ref) {
   const {
-    docKey, html, fontFamily, fontSize, onContent, onFiles, onRequestFile, onRequestMedia,
+    docKey, html, fontFamily, fontSize, onContent, onCommit, onFiles, onRequestFile, onRequestMedia,
     onImport, onInsertBoard,
     onOpenBoard, onOpenPreview, onOpenWiki, onOpenUrl, onPreference,
   } = props;
@@ -148,6 +151,20 @@ const RichEditor = forwardRef<RichEditorHandle, Props>(function RichEditor(props
     editor.commands.setContent(toEditorHtml(html), { emitUpdate: false });
     lastStored.current = html;
   }, [html, editor]);
+
+  // 失焦 / 窗口隐藏时立即把草稿刷下去：不等自动保存的 debounce，
+  // 「刚改完表格就关窗口 / 切笔记」不会再丢最后一次编辑。
+  useEffect(() => {
+    if (!editor) return;
+    const flush = () => onCommit?.();
+    editor.on('blur', flush);
+    const vis = () => { if (document.visibilityState === 'hidden') flush(); };
+    document.addEventListener('visibilitychange', vis);
+    return () => {
+      editor.off('blur', flush);
+      document.removeEventListener('visibilitychange', vis);
+    };
+  }, [editor, onCommit]);
 
   useImperativeHandle(ref, () => ({
     insertAttachment: (att: Attachment) => {
@@ -264,6 +281,11 @@ const RichEditor = forwardRef<RichEditorHandle, Props>(function RichEditor(props
     const items: MenuItem[] = [
       { label: '插入 3 × 3 表格', icon: <Table2 size={14} />, onClick: () => run((c) => c.insertTable({ rows: 3, cols: 3, withHeaderRow: true })) },
       { label: '', divider: true },
+      { label: '选中整个表格', icon: <Table2 size={14} />, disabled: !inTable, onClick: () => selectTablePart('table') },
+      { label: '选中整行', icon: <Table2 size={14} />, disabled: !inTable, onClick: () => selectTablePart('row') },
+      { label: '选中整列', icon: <Table2 size={14} />, disabled: !inTable, onClick: () => selectTablePart('column') },
+      { label: '选中后可用工具栏的字体 / 字号 / 颜色 / 加粗统一改格式', disabled: true },
+      { label: '', divider: true },
       { label: '在上方插入行', icon: <Plus size={14} />, onClick: () => run((c) => c.addRowBefore()) },
       { label: '在下方插入行', icon: <Plus size={14} />, onClick: () => run((c) => c.addRowAfter()) },
       { label: '在左侧插入列', icon: <Plus size={14} />, onClick: () => run((c) => c.addColumnBefore()) },
@@ -280,6 +302,39 @@ const RichEditor = forwardRef<RichEditorHandle, Props>(function RichEditor(props
     if (!inTable) items.splice(1, 0, { label: '光标不在表格里时，只有第一项可用', divider: true });
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setMenu({ x: r.left, y: r.bottom + 4, items });
+  };
+
+  /** 选中表格的一部分（整表 / 整行 / 整列），选中后工具栏的格式命令全部生效。 */
+  const selectTablePart = (kind: 'table' | 'row' | 'column') => {
+    const { selection } = editor.state;
+    const $from = cellAround(selection.$from);
+    const $to = cellAround(selection.$to) || $from;
+    if (!$from || !$to) return;
+    const table = $from.node(-1);
+    const start = $from.start(-1);
+    const map = TableMap.get(table);
+    const idxA = map.map.indexOf($from.pos - start);
+    const idxB = map.map.indexOf($to.pos - start);
+    if (idxA < 0 || idxB < 0) return;
+    const first = Math.min(idxA, idxB);
+    const last = Math.max(idxA, idxB);
+    let anchor: number;
+    let head: number;
+    if (kind === 'table') {
+      anchor = start + map.map[0];
+      head = start + map.map[map.map.length - 1];
+    } else if (kind === 'row') {
+      const rowA = Math.floor(first / map.width);
+      const rowB = Math.floor(last / map.width);
+      anchor = start + map.map[rowA * map.width];
+      head = start + map.map[rowB * map.width + map.width - 1];
+    } else {
+      const colA = first % map.width;
+      const colB = last % map.width;
+      anchor = start + map.map[colA];
+      head = start + map.map[map.map.length - map.width + colB];
+    }
+    editor.chain().focus().setCellSelection({ anchorCell: anchor, headCell: head }).run();
   };
 
   const applyLink = () => {

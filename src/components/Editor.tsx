@@ -906,6 +906,7 @@ export default function Editor() {
             fontFamily={ws.settings.fontFamily}
             fontSize={ws.settings.fontSize}
             onContent={(stored) => schedule({ ...draftRef.current, content: stored })}
+            onCommit={() => flushRef.current?.()}
             onFiles={(files) => void handleFiles(files)}
             onRequestFile={() => fileRef.current?.click()}
             onRequestMedia={() => mediaRef.current?.click()}

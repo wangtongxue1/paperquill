@@ -1,7 +1,7 @@
 /** 统一的「导出」面板：列表右键、编辑器菜单、导入导出页、命令面板都打开它。
  *  格式清单在 src/export.ts，这里只负责选格式和给一句人话说明。 */
 import { useMemo, useState } from 'react';
-import { Archive, Check, FileDown, FileText, Globe, Printer, Type } from 'lucide-react';
+import { Archive, Check, FileDown, FileText, FileType2, Globe, Printer, Type } from 'lucide-react';
 import { useApp } from '../context';
 import { EXPORT_FORMATS, exportNotes, type ExportFormat } from '../export';
 import { printNote } from '../io';
@@ -13,6 +13,7 @@ const ICON: Record<ExportFormat, React.ReactNode> = {
   pdf: <FileDown size={18} />,
   txt: <Type size={18} />,
   enex: <Archive size={18} />,
+  docx: <FileType2 size={18} />,
 };
 
 export default function ExportDialog() {
