@@ -579,6 +579,13 @@ function SettingsDialog() {
       <label className="checkline"><input type="checkbox" checked={s.contentThumbnails} onChange={(e) => patch({ contentThumbnails: e.target.checked, showThumbnails: e.target.checked })} /> 把笔记里的第一张图用作列表缩略图</label>
       <p className="settings-note">默认关闭：正文里插入的图片只是内容，不是笔记的封面 / LOGO；打开后才会把首图显示在列表项左侧。</p>
 
+      {isDesktop() && (
+        <>
+          <label className="checkline"><input type="checkbox" checked={s.closeToTray} onChange={(e) => patch({ closeToTray: e.target.checked })} /> 点关闭按钮时最小化到系统托盘</label>
+          <p className="settings-note">默认开启：点 ✕ 后窗口收进屏幕右下角托盘，点托盘图标回到窗口，托盘右键「退出」才真正关闭；取消勾选则点 ✕ 直接退出。</p>
+        </>
+      )}
+
       <h4 className="section-title">导航与检索</h4>
       <div className="settings-nav-row">
         <Btn onClick={() => openDialog('sidebar')}><Settings2 size={14} /> 自定义侧栏区块</Btn>

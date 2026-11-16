@@ -172,6 +172,13 @@ export default function App() {
     };
   }, [actions]);
 
+  /* ---------- 桌面版：关闭行为（最小化到托盘 / 直接退出）同步给 Rust ---------- */
+  const closeToTray = ws ? ws.settings.closeToTray : true;
+  useEffect(() => {
+    if (!isDesktop() || !ws) return;
+    void storage.setCloseBehavior(closeToTray ? 'hide' : 'exit').catch(() => {});
+  }, [closeToTray, ws]);
+
   /* ---------- 启动：载入存档，首次运行给示例内容 ---------- */
   useEffect(() => {
     void (async () => {

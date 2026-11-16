@@ -20,6 +20,7 @@ export const defaultSettings: Settings = {
   fontFamily: 'inherit',
   fontSize: '3',
   fontColor: '#2b302c',
+  closeToTray: true,
 };
 
 /** 内置模板：图标走线性 icon 键（不再是 emoji），卡片上另给一句人话说明。

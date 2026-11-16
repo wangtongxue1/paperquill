@@ -14,6 +14,37 @@ use std::sync::{OnceLock, RwLock};
 /// 所以配置永远找得到，不会跟着数据目录一起搬走。
 pub static DATA_DIR: RwLock<Option<PathBuf>> = RwLock::new(None);
 pub static CONFIG_PATH: OnceLock<PathBuf> = OnceLock::new();
+/// 关闭主窗口的行为："hide"（最小化到托盘，默认）或 "exit"（直接退出）。
+/// 持久化在 behavior.conf（与 zhijian.conf 同目录），前端改设置时同步过来。
+pub static CLOSE_MODE: RwLock<String> = RwLock::new(String::new());
+
+/// behavior.conf 与 zhijian.conf 放在同一目录（默认数据目录），不跟数据目录走。
+pub fn behavior_path() -> Option<PathBuf> {
+    conf_path().and_then(|p| p.parent().map(|d| d.join("behavior.conf")))
+}
+
+/// 读取持久化的关闭行为，setup 阶段调用；缺省 "hide"（最小化到托盘）。
+pub fn load_close_mode() -> String {
+    behavior_path()
+        .and_then(|p| fs::read_to_string(p).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| s == "hide" || s == "exit")
+        .unwrap_or_else(|| "hide".to_string())
+}
+
+#[tauri::command]
+pub fn set_close_behavior(mode: String) -> Result<(), String> {
+    if mode != "hide" && mode != "exit" {
+        return Err("未知的关闭行为".into());
+    }
+    *CLOSE_MODE.write().map_err(|e| format!("关闭行为锁异常：{e}"))? = mode.clone();
+    if let Some(p) = behavior_path() {
+        if let Err(e) = fs::write(&p, &mode) {
+            eprintln!("[zhijian] behavior.conf 写入失败：{e}");
+        }
+    }
+    Ok(())
+}
 
 fn dir() -> Result<PathBuf, String> {
     DATA_DIR

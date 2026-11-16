@@ -226,6 +226,8 @@ export interface Settings {
   fontFamily: string;
   fontSize: string;
   fontColor: string;
+  /** 桌面版：点关闭按钮时最小化到托盘（true，默认）还是直接退出（false）。 */
+  closeToTray: boolean;
 }
 
 export interface Workspace {

@@ -120,7 +120,10 @@ export function windowAction(action: 'min' | 'max' | 'close'): Promise<void> {
   return invoke<void>('window_action', { action });
 }
 
-/* ---------------- 浏览器模式：IndexedDB 单键存档 ---------------- */
+/** 桌面版：把关闭行为同步给 Rust（"hide"=最小化到托盘，"exit"=直接退出）。 */
+export function setCloseBehavior(mode: 'hide' | 'exit'): Promise<void> {
+  return invoke<void>('set_close_behavior', { mode });
+}/* ---------------- 浏览器模式：IndexedDB 单键存档 ---------------- */
 
 /** 内部存储键**刻意保留旧名**：改名只换品牌，不能让浏览器模式里已有的笔记消失。
  *  这两个字符串属于数据契约，不是品牌文案，见 docs/data-format.md。 */
@@ -188,6 +191,11 @@ function parseWorkspace(raw: unknown): Workspace {
 
 export const storage = {
   isDesktop,
+
+  /** 桌面版：点关闭按钮时最小化到托盘（hide）还是直接退出（exit）。 */
+  setCloseBehavior(mode: 'hide' | 'exit'): Promise<void> {
+    return setCloseBehavior(mode);
+  },
 
   /** 解析失败会抛错：调用方必须停止写盘，避免用示例数据覆盖损坏的存档。 */
   async load(): Promise<Workspace | null> {
