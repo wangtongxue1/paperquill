@@ -129,6 +129,50 @@ turndown.addRule('fencedCodeLang', {
   },
 });
 
+// GFM 表格：turndown 默认完全不认识 <table>，整张表会被拆成裸段落。
+// 这里在 TABLE 层统一重建管道表：单元格文本递归交给 turndown（保住加粗/链接/图片），
+// 管道转义、列数补齐（跨列/缺列）、表头对齐（:--- / :---: / ---:）都还原。
+function mdCellText(el: HTMLElement): string {
+  try {
+    return turndown.turndown(el.innerHTML.trim()).replace(/\s*\n\s*/g, ' ').trim();
+  } catch {
+    return (el.textContent || '').replace(/\s*\n\s*/g, ' ').trim();
+  }
+}
+
+function cellAlign(el: HTMLElement): string {
+  const a = (el.getAttribute('align') || el.style.textAlign || '').toLowerCase();
+  if (a === 'center') return ':---:';
+  if (a === 'right' || a === 'end') return '---:';
+  if (a === 'left' || a === 'start') return ':---';
+  return '---';
+}
+
+turndown.addRule('gfmTable', {
+  filter: (node) => node.nodeName === 'TABLE',
+  replacement: (_content, node) => {
+    const table = node as HTMLTableElement;
+    const rows = Array.from(table.querySelectorAll('tr'));
+    if (!rows.length) return '';
+    const grid = rows.map((tr) =>
+      Array.from(tr.children)
+        .filter((el) => /^(TD|TH)$/.test(el.tagName))
+        .map((el) => mdCellText(el as HTMLElement).replace(/\|/g, '\\|'))
+    );
+    const cols = Math.max(...grid.map((r) => r.length));
+    const head = rows[0];
+    const headCells = Array.from(head.children).filter((el) => /^(TD|TH)$/.test(el.tagName)) as HTMLElement[];
+    const sepCells = Array.from({ length: cols }, (_v, i) => cellAlign(headCells[i] || headCells[headCells.length - 1]));
+    const lines = grid.map((r) => {
+      const cells = [...r];
+      while (cells.length < cols) cells.push('');
+      return `| ${cells.join(' | ')} |`;
+    });
+    // GFM 规定第一行就是表头，分隔行永远插在第一行之后。
+    return `\n\n${[lines[0], `| ${sepCells.join(' | ')} |`, ...lines.slice(1)].join('\n')}\n\n`;
+  },
+});
+
 const PURIFY_OPTIONS = {
   ADD_ATTR: [
     'data-wiki', 'data-att-id', 'data-task-line', 'data-lang', 'data-align',
