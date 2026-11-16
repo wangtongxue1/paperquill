@@ -48,7 +48,8 @@
       "nsis": {
         "displayLanguageSelector": false,
         "languages": ["SimpChinese"],
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "template": "./nsis-template/installer.nsi"
       }
     }
   }
