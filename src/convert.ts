@@ -252,20 +252,47 @@ function cellAlign(el: HTMLElement): string {
   return '---';
 }
 
+/** 单元格内容是管道表能无损表达的：纯文本，或只有一个纯行内段落的 <p>。 */
+function pipeSafeCell(el: HTMLElement): boolean {
+  const kids = Array.from(el.children);
+  if (!kids.length) return true;
+  if (kids.length !== 1 || kids[0].tagName !== 'P') return false;
+  const p = kids[0] as HTMLElement;
+  if (p.style.textAlign) return false; // 格内对齐管道表表达不了
+  return !p.querySelector('ul,ol,pre,blockquote,table,div,h1,h2,h3,h4,h5,h6,video,audio,br');
+}
+
+/** 管道表表达不了的表格（无表头 / 富内容格 / 拖过列宽）保留原始 HTML。
+ *  顺带把 TipTap 渲染的列宽 style="width: 97.1px" 换成它解析时认的 <col width="97">。 */
+function tableOuterHtml(table: HTMLTableElement): string {
+  const clone = table.cloneNode(true) as HTMLTableElement;
+  clone.querySelectorAll('colgroup > col').forEach((col) => {
+    const m = (col.getAttribute('style') || '').match(/(^|;)\s*width:\s*([\d.]+)px/);
+    if (m) col.setAttribute('width', String(Math.round(Number(m[2]))));
+  });
+  return clone.outerHTML;
+}
+
 turndown.addRule('gfmTable', {
   filter: (node) => node.nodeName === 'TABLE',
   replacement: (_content, node) => {
     const table = node as HTMLTableElement;
     const rows = Array.from(table.querySelectorAll('tr'));
     if (!rows.length) return '';
-    const grid = rows.map((tr) =>
-      Array.from(tr.children)
-        .filter((el) => /^(TD|TH)$/.test(el.tagName))
-        .map((el) => mdCellText(el as HTMLElement).replace(/\|/g, '\\|'))
-    );
+    const rowCells = (tr: Element) =>
+      Array.from(tr.children).filter((el) => /^(TD|TH)$/.test(el.tagName)) as HTMLElement[];
+    const hasHeader = rowCells(rows[0]).some((el) => el.tagName === 'TH');
+    // GFM 管道表第一行必须是表头且每格只有一行行内文本；表达不了的
+    // （无表头 / 格内多段或列表 / 拖过列宽）保留 HTML，切回富文本完整还原。
+    const hasFixedCol = !!Array.from(table.querySelectorAll('colgroup > col'))
+      .find((col) => /(^|;)\s*width:\s*[\d.]+px/.test(col.getAttribute('style') || '') || col.hasAttribute('width'));
+    const pipeSafe = hasHeader && !hasFixedCol
+      && rows.every((tr) => rowCells(tr).every(pipeSafeCell));
+    if (!pipeSafe) return `\n\n${tableOuterHtml(table)}\n\n`;
+    const grid = rows.map((tr) => rowCells(tr).map((el) => mdCellText(el as HTMLElement).replace(/\|/g, '\\|')));
     const cols = Math.max(...grid.map((r) => r.length));
     const head = rows[0];
-    const headCells = Array.from(head.children).filter((el) => /^(TD|TH)$/.test(el.tagName)) as HTMLElement[];
+    const headCells = rowCells(head);
     const sepCells = Array.from({ length: cols }, (_v, i) => cellAlign(headCells[i] || headCells[headCells.length - 1]));
     const lines = grid.map((r) => {
       const cells = [...r];
@@ -280,11 +307,12 @@ turndown.addRule('gfmTable', {
 const PURIFY_OPTIONS = {
   ADD_ATTR: [
     'data-wiki', 'data-att-id', 'data-task-line', 'data-lang', 'data-align', 'data-block-align',
+    'colspan', 'rowspan', 'width',
     'target', 'rel', 'class', 'data-time', 'data-board-id', 'datetime',
     'style', 'data-id', 'contenteditable', 'download', 'checked', 'type',
     'controls', 'poster', 'preload', 'playsinline', 'loop', 'muted',
   ],
-  ADD_TAGS: ['iframe', 'video', 'audio', 'source', 'time'],
+  ADD_TAGS: ['iframe', 'video', 'audio', 'source', 'time', 'colgroup', 'col'],
   FORBID_TAGS: ['script', 'object', 'embed', 'form', 'meta', 'link'],
   FORBID_ATTR: ['onerror', 'onload', 'onclick', 'srcdoc'],
 };

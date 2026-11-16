@@ -251,6 +251,61 @@ try {
   const mdStyle2 = htmlToMd(htmlI);
   check('I11 再转一次源码仍齐全（不越切越丢）', mdStyle2.includes('~~删除~~') && mdStyle2.includes('<u>') && mdStyle2.includes('data-block-align="center"') && (mdStyle2.includes('#e03e3e') || mdStyle2.includes('224, 62, 62')), mdStyle2);
 
+  /* ---------- J. 表格往返专项（用户反馈：切源码再回来表格还是不对） ---------- */
+  const rt = (name: string, html: string, checks: [string, (md: string, back: string) => boolean][]) => {
+    const md = htmlToMd(html);
+    const back = mdToHtml(md);
+    out.push(`J ${name} md = ${md.replace(/\n/g, '⏎').slice(0, 300)}`);
+    out.push(`J ${name} back = ${back.replace(/\n/g, ' ').slice(0, 300)}`);
+    for (const [msg, fn] of checks) check(`J ${name}: ${msg}`, fn(md, back), '');
+    return { md, back };
+  };
+  // 带表头 + 单行文本格：管道表
+  rt('tipTap', `<table><colgroup><col style="min-width: 48px;"><col style="min-width: 48px;"></colgroup><tbody><tr><th><p>名称</p></th><th><p>数量</p></th></tr>`
+    + `<tr><td><p>苹果</p></td><td><p>5</p></td></tr></tbody></table>`, [
+    ['简单表走管道', (md) => md.startsWith('| 名称 | 数量 |') && md.includes('| 苹果 | 5 |')],
+    ['回来仍是表头+数据行', (_md, back) => (back.match(/<th>/g) || []).length === 2 && (back.match(/<td>/g) || []).length === 2],
+  ]);
+  // 无表头（整表 td）：之前会被 GFM 顶成表头行，现在保留 HTML
+  const jHl = rt('headerless', `<table><tbody><tr><td><p>苹果</p></td><td><p>5</p></td></tr><tr><td><p>香蕉</p></td><td><p>3</p></td></tr></tbody></table>`, [
+    ['源码保留 HTML 表', (md) => md.includes('<table') && md.includes('<td>')],
+    ['回来不加表头', (_md, back) => (back.match(/<th/g) || []).length === 0 && (back.match(/<td/g) || []).length === 4],
+  ]);
+  mark('J-mount-headerless');
+  const edJh = mount(jHl.back);
+  check('J 编辑器里无表头表原样还原', edJh.view.dom.querySelectorAll('td').length === 4 && edJh.view.dom.querySelectorAll('th').length === 0,
+    `td=${edJh.view.dom.querySelectorAll('td').length} th=${edJh.view.dom.querySelectorAll('th').length}`);
+  // 拖过列宽（col 有 width 样式）：保留 HTML 并换成 TipTap 认的 width 属性
+  rt('colwidth', `<table><colgroup><col style="width: 120.4px;"><col style="min-width: 48px;"></colgroup><thead><tr><th><p>甲</p></th><th><p>乙</p></th></tr></thead>`
+    + `<tbody><tr><td><p>1</p></td><td><p>2</p></td></tr></tbody></table>`, [
+    ['拖过列宽保留 HTML', (md) => md.includes('<table')],
+    ['列宽换算成 width 属性', (_md, back) => back.includes('width="120"')],
+  ]);
+  // 单元格多段落：管道压行会毁结构，保留 HTML
+  rt('multiPara', `<table><thead><tr><th><p>甲</p></th><th><p>乙</p></th></tr></thead><tbody><tr><td><p>第一段</p><p>第二段</p></td><td><p>普通</p></td></tr></tbody></table>`, [
+    ['富内容格保留 HTML', (md) => md.includes('<table') && md.includes('第二段')],
+    ['回来两段都在且列数对', (_md, back) => back.includes('第一段') && back.includes('第二段') && (back.match(/<td/g) || []).length === 2],
+  ]);
+  // 单元格内列表 / 加粗 / 链接
+  rt('richCell', `<table><thead><tr><th><p>甲</p></th><th><p>乙</p></th></tr></thead><tbody><tr><td><p><strong>加粗</strong>和<a href="https://a.b">链接</a></p><ul><li><p>列表项</p></li></ul></td><td><p>x</p></td></tr></tbody></table>`, [
+    ['格内列表保留', (md) => md.includes('<li>')],
+    ['回来列表与列数都在', (_md, back) => back.includes('列表项') && (back.match(/<td/g) || []).length === 2],
+  ]);
+  // 格内对齐 + 颜色
+  rt('styledCell', `<table><thead><tr><th><p>甲</p></th><th><p>乙</p></th></tr></thead><tbody><tr><td><p style="text-align: center"><span style="color: #e03e3e">红</span></p></td><td><p>右列</p></td></tr></tbody></table>`, [
+    ['格内对齐保留 HTML', (md) => md.includes('<table')],
+    ['回来颜色与对齐都在', (_md, back) => (back.includes('e03e3e') || back.includes('224, 62, 62')) && back.includes('text-align: center')],
+  ]);
+  // 带表头的简单表再切一次源码仍是管道（不退化成 HTML）
+  const jPipe = rt('pipeStable', `<table><thead><tr><th><p>甲</p></th><th><p>乙</p></th></tr></thead><tbody><tr><td><p>1</p></td><td><p>2</p></td></tr></tbody></table>`, [
+    ['首转是管道', (md) => md.startsWith('| 甲 | 乙 |')],
+  ]);
+  // 带表头的简单表：两次往返后仍是同一条管道表（不漂移、不退化成 HTML）
+  const mdP1 = htmlToMd(jPipe.back);
+  const mdP2 = htmlToMd(mdToHtml(mdP1));
+  check('J pipeStable: 二次往返仍是管道且不漂移', mdP1 === mdP2 && mdP1.startsWith('| 甲 | 乙 |'),
+    `p1=${mdP1.replace(/\n/g, '⏎')} p2=${mdP2.replace(/\n/g, '⏎')}`);
+
 } catch (err) {
   out.push(`CRASH: ${err}`);
 }
