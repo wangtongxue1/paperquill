@@ -273,5 +273,6 @@ export const FULL_VIEW_KINDS = ['home', 'tasks', 'files', 'calendar', 'templates
 
 export const MAX_VERSIONS = 15;
 /** v3：内置模板换文案/图标（迁移时按 id 刷新，自定义模板原样保留）。
- *  v4：笔记增加 hidden（隐藏）字段，老档补 false，笔记内容不动。 */
-export const WORKSPACE_VERSION = 4;
+ *  v4：笔记增加 hidden（隐藏）字段，老档补 false，笔记内容不动。
+ *  v5：内置示例笔记从旧品牌文案（墨记）刷新成新文案，只动仍带旧文案的种子笔记。 */
+export const WORKSPACE_VERSION = 5;

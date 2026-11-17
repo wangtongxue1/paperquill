@@ -35,7 +35,9 @@ export default function ExportDialog() {
     if (blocked) return;
     setBusy(true);
     try {
-      const res = await exportNotes(notes, format, ws.notes.filter((n) => !n.trashed));
+      // ENEX 单篇导出也会带上全库（见 exportSingle 的 all 参数），必须排除隐藏笔记，
+      // 否则隐藏的日记会混进导出的 enex 文件里。
+      const res = await exportNotes(notes, format, ws.notes.filter((n) => !n.trashed && !n.hidden));
       toast(res.count > 1 ? `已导出 ${res.count} 篇（${res.name}）` : `已导出「${res.name}」`);
       closeDialog();
     } catch (e) {

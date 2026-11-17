@@ -30,7 +30,7 @@ assert.equal(typeof migrate, 'function', 'migrate 应被导出');
 
 // 1. 空档补齐默认值
 const a = migrate({ notes: [] });
-assert.equal(a.version, 4, 'version 应升级到当前版本');
+assert.equal(a.version, 5, 'version 应升级到当前版本');
 assert.ok(Array.isArray(a.templates) && a.templates.length > 0, 'templates 应补内置模板');
 assert.equal(a.templates.length, 6, '内置模板应补齐 6 套');
 assert.ok(a.templates.every((t) => t.desc && t.desc.length > 4), '内置模板都应有一句说明');
@@ -128,10 +128,32 @@ const g = migrate({
     { id: 'n2', title: '已经隐藏的', content: 'x', mode: 'rich', hidden: true },
   ],
 });
-assert.equal(g.version, 4, 'v3 档要升到 v4');
+assert.equal(g.version, 5, 'v3 档要升到 v5');
 assert.equal(g.notes[0].hidden, false, '老笔记补 hidden=false');
 assert.equal(g.notes[1].hidden, true, '已经隐藏的笔记不能被迁移改回显示');
 assert.equal(g.notes[0].content, '正文', '迁移不能动正文');
 assert.equal(g.notes[1].mode, 'rich', '迁移不能动编辑器模式');
 
-console.log('migrate: 9 组断言全部通过（含 v1→v2 字段补齐、v2→v3 内置模板刷新、v3→v4 隐藏字段）');
+// 8. v4 -> v5：旧品牌（墨记）时代的内置种子刷新成新文案，用户自己的笔记不动
+const h5 = migrate({
+  version: 4,
+  notes: [
+    { id: 's1', title: '欢迎来到墨记', content: '<p>墨记是本地优先的个人笔记</p>', mode: 'rich', tags: ['开始使用'], notebookId: 'nb1' },
+    { id: 's2', title: '双模式怎么切换', content: '从右上角切到 Markdown，墨记支持…', mode: 'markdown', tags: ['技巧'], notebookId: 'nb1' },
+    { id: 'u1', title: '我的日记', content: '今天用了墨记，不错', mode: 'markdown', notebookId: 'nb2' },
+    { id: 's3', title: '读书笔记 · 卡片笔记写作法', content: '## 书目\n- 书名：卡片笔记写作法', mode: 'markdown', notebookId: 'nb3' },
+  ],
+});
+const s1 = h5.notes.find((n) => n.id === 's1');
+const s2 = h5.notes.find((n) => n.id === 's2');
+const u1 = h5.notes.find((n) => n.id === 'u1');
+const s3 = h5.notes.find((n) => n.id === 's3');
+assert.equal(s1.title, '欢迎来到纸间笔记', '旧欢迎页标题刷新');
+assert.ok(s1.content.includes('纸间笔记') && !s1.content.includes('墨记'), '欢迎页正文换成新文案');
+assert.equal(s1.notebookId, 'nb1', '刷新不动笔记本归属');
+assert.equal(s1.tags.join(','), '开始使用', '刷新不动标签');
+assert.ok(!s2.content.includes('墨记') && s2.content.includes('源码视图'), '双模式种子刷新成新文案');
+assert.ok(!u1.content.includes('纸间笔记') && u1.content.includes('墨记'), '用户自己写的笔记即使提到墨记也不动');
+assert.equal(s3.content.includes('书目'), true, '不含墨记的种子原样保留');
+
+console.log('migrate: 10 组断言全部通过（含 v1→v2 字段补齐、v2→v3 内置模板刷新、v3→v4 隐藏字段、v4→v5 种子刷新）');

@@ -17,7 +17,7 @@
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `version` | number | 存档格式版本，当前 **`4`**（`WORKSPACE_VERSION`） |
+| `version` | number | 存档格式版本，当前 **`5`**（`WORKSPACE_VERSION`） |
 | `notes` | Note[] | 全部笔记，**含回收站里的** |
 | `notebooks` | Notebook[] | `id / name / groupId / color / createdAt` |
 | `groups` | NotebookGroup[] | `id / name / collapsed / createdAt` |
@@ -32,6 +32,10 @@
 | `updatedAt` | number | 毫秒时间戳 |
 
 **未知字段必须原样保留。** `migrate()` 用对象展开把顶层所有字段带过去，只补缺失值、不删属性。
+
+### v4 → v5 迁移规则
+
+v5 把仍是旧品牌文案（墨记时代）的内置示例笔记刷新成新文案（`refreshSeedNotes`）：标题匹配内置种子（旧欢迎页标题「欢迎来到墨记」也认）且标题或正文还带「墨记」字样才替换 `title` / `content` / `mode`；笔记本、标签、置顶收藏、时间戳全部保留，用户自己创建或改写过的笔记即使提到「墨记」也不动。
 
 ### v3 → v4 迁移规则
 

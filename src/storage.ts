@@ -1,6 +1,6 @@
 import type { Note, Notebook, NotebookGroup, Settings, Template, Workspace } from './types';
 import { DEFAULT_SIDEBAR_SECTIONS, WORKSPACE_VERSION } from './types';
-import { builtinTemplates, defaultSettings } from './data';
+import { builtinTemplates, defaultSettings, seedWorkspace } from './data';
 import { htmlToMd, resolveAttachmentRefs } from './convert';
 import { downloadBlob } from './utils';
 
@@ -96,9 +96,29 @@ export function migrate(raw: unknown): Workspace {
   // v1 -> v2 只增加顶层可选字段，笔记结构不变，所以不需要改写 notes。
   // v2 -> v3 只把内置模板换成新的文案/图标（见 migrateTemplates），笔记同样不动。
   // v3 -> v4 只在笔记上补 hidden=false（见 normalizeNote），正文与其它字段一律不动。
+  // v4 -> v5 把仍是旧品牌文案（墨记）的内置示例笔记刷新成新文案，用户自己写的笔记不动。
+  if (version < 5) refreshSeedNotes(ws);
   // 以后若有破坏性变更，在这里按 version 逐级升级。
   void version;
   return ws;
+}
+
+/** v5：把旧品牌（墨记）时代的内置示例笔记刷新成新文案。
+ *  识别条件很保守：标题匹配某个内置种子（旧欢迎页标题也认），且标题或正文里
+ *  还带「墨记」字样才替换 title/content/mode；笔记本、标签、置顶收藏、时间戳
+ *  全部保留，用户自己创建或改写过的笔记碰都不碰。 */
+function refreshSeedNotes(ws: Workspace): void {
+  const seeds = seedWorkspace().notes;
+  for (const n of ws.notes) {
+    // 旧欢迎页标题是「欢迎来到墨记」，对应新种子的「欢迎来到纸间笔记」。
+    const seedTitle = n.title === '欢迎来到墨记' ? '欢迎来到纸间笔记' : n.title;
+    const seed = seeds.find((s) => s.title === seedTitle);
+    if (!seed) continue;
+    if (!n.title.includes('墨记') && !n.content.includes('墨记')) continue;
+    n.title = seed.title;
+    n.content = seed.content;
+    n.mode = seed.mode;
+  }
 }
 
 /** Tauri 2 在 WebView 里注入的是 __TAURI_INTERNALS__；浏览器预览模式没有。 */

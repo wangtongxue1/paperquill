@@ -514,7 +514,8 @@ export default function Editor() {
   /* ---------- 内链 / 外链 ---------- */
 
   const openWiki = (title: string) => {
-    const hit = ws.notes.find((n) => !n.trashed && n.title.toLowerCase() === title.toLowerCase());
+    // 隐藏笔记同样不通过内链跳转触达——「隐藏」的意义就是翻不到。
+    const hit = ws.notes.find((n) => !n.trashed && !n.hidden && n.title.toLowerCase() === title.toLowerCase());
     if (hit) { flushRef.current(); setActiveId(hit.id); setNav({ kind: 'all' }); }
     else toast(`还没有「${title}」这篇笔记，可以先新建它`, 'err');
   };
